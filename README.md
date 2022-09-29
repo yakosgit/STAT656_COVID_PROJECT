@@ -19,6 +19,8 @@ https://covid.cdc.gov/covid-data-tracker/#underlying-med-conditions
 ## Delphi COVIDcast Epidata API
 https://cmu-delphi.github.io/delphi-epidata/api/covidcast.html
 
+https://delphi.cmu.edu/covidcast/export/
+
 ## COVID-19 Case Surveillance Public Use Data with Geography
 https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data-with-Ge/n8mc-b4w4
 
