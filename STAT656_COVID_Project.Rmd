@@ -1,0 +1,69 @@
+---
+title: 'STAT656_COVID_Project'
+output:
+  html_document: default
+---
+
+# Loading packages and Data
+```{r loadingPackages}
+packs = c('dplyr','ggplot2', 'caret','corrplot', 'e1071','readr', 'pROC')
+lapply(packs,require,character.only=TRUE)
+```
+
+```{r loadingData}
+# Let's clean up the name space to free up memory
+rm(list=ls())# Just to clean up the memory again
+
+dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
+dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
+dataSet     = read_csv(file.path(dataSetPath,dataSetName))
+```
+# Exploratory analysis
+items that usually need to be checked:
+
+* data structures
+* checking for missing data
+* Converting qualitative features to dummy variables
+* extreme observations
+* skewness/transformations
+* correlations
+
+```{r Check data structures}
+str(dataSet)
+```
+
+```{r Check if any features have NA}
+sapply(dataSet, function(x) sum(is.na(x)))
+
+```
+
+```{r Check number of unique values}
+rbind(sapply(dataSet,function(x){ length(unique(x))}),
+      sapply(dataSet,class))
+```
+
+```{r}
+
+```
+
+```{r Data spliting}
+Y       = select(dataSet,death_yn) %>% unlist()
+X       = select(dataSet,-death_yn)
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
