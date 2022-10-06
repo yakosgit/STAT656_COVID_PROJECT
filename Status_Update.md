@@ -13,3 +13,4 @@ Ideas for Video Assignment #2 - Feynman Method (explanation of a topic relevant 
 - Well-calibrated probabilities / calibration plot
 - Confusion matrix (we could group this with specificy and sensitivity)
 - predictions and probability thresholds
+ 
