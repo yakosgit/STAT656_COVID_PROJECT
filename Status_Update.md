@@ -20,7 +20,7 @@
 
 - To make this easier to plot as we may not have any observations at every given probability estimate, we bin the observations much like we do when making a histogram.
 
-- To create our plot we bin the predicted calass probabilities and plot the midpoint of the bin against the observed probabilities. A calibration plot with a 45 degree line would indicate “perfectly calibrated” probabilities.
+- To create our plot we bin the predicted class probabilities and plot the midpoint of the bin against the observed probabilities. A calibration plot with a 45 degree line would indicate “perfectly calibrated” probabilities.
 
 ![image](https://user-images.githubusercontent.com/73800545/195630616-1dafdcfc-b6ba-4e3a-81ed-b36e01be0337.png)
 
