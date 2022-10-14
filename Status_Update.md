@@ -1,7 +1,6 @@
 # Task #2 Feynman Method
 
 # Step 1: 
-*ToDelete (Write down clearly and concisely what you are trying to learn. Don't write down jargon and be as specific as is reasonable.)*
 
 - We want to learn how to interpret a calibration plot to compare our predicted/estimated class probabilities with the relative frequency of events in our data. 
 
@@ -10,15 +9,12 @@
 
 
 # Step 2: 
-*ToDelete (Explain the concept in simple language.  Be on the lookout for moments in which you use terminology from this class.  Seek to use the definition instead.  Include a very simple example demonstrating the underlying idea.)*
 
 - In a classification model, we ofter generate estimated class probabilities. 
 
 - While we don't know the true probability of Y given a value(s) of the predictor variable(s), we want the predicted probabilities to align with the true likelihood of the event or class. 
 
 - To estimate how well these align, we can compare a given predicted probability from our model with the proportion of events from the observations with that predicted probability. For example, if our model produces a probability of say 25% that a given observation Xi belonged to Class Ci, then this value would be well calibrated if similar events as Xi in the data set were from class Ci 1 of 4 times, on average.
-
-- To make this easier to plot as we may not have any observations at every given probability estimate, we bin the observations much like we do when making a histogram.
 
 - To create our plot we bin the predicted class probabilities and plot the midpoint of the bin against the observed probabilities. A calibration plot with a 45 degree line would indicate “perfectly calibrated” probabilities.
 
@@ -29,9 +25,8 @@
   
  
 # Step 3:  
-*ToDelete (During the course of 2, you'll run into moments where your explanation is vague or there is something you don't understand or can't relay using non-technical language.  Identify these moments here, using a list.)*
 
-Here we identified a couple of concepts mentioned in step 4 that need further clarification. So we raise a couple of questions and attempt to answer them:
+Here we identified a couple of concepts mentioned in step 2 that need further clarification. So we raise a couple of questions and attempt to answer them:
   
   ### 1. What does it mean to bin the probabilities for plotting?
   
@@ -40,7 +35,6 @@ Here we identified a couple of concepts mentioned in step 4 that need further cl
   
   
 # Step 4: 
- *ToDelete (Seek to solidify these concepts. Go back to your notes or ask in a live session or post to the discussion board)* 
 
 ### 1. What does it mean to bin the probabilities for plotting?
   
@@ -61,7 +55,9 @@ Here we identified a couple of concepts mentioned in step 4 that need further cl
   doesn't follow the 45 degree line, that is not necessarily a bad thing. Rare events may cause deviations in the upper probability--you may not have any observations
   in your data where the probability of success is high.
 
+![image](https://user-images.githubusercontent.com/73800545/195630616-1dafdcfc-b6ba-4e3a-81ed-b36e01be0337.png)
 
+<sub> *Chapter_11_Measuring_Performance_in_Classification_Models/Ch11Fig01 https://github.com/topepo/APM_Figures/blob/master/Chapter_11_Measuring_Performance_in_Classification_Models/Ch11Fig01b.pdf* 
 
 
 
