@@ -71,3 +71,5 @@ data$month <- substr(data$case_month, 6, 8)
 
 table(data$year)
 table(data$month)
+
+#test changes - delete
