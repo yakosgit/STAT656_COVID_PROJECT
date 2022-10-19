@@ -16,18 +16,20 @@ which(apply(data, 2, anyNA))
 #filter out rows where we don't have data for underlying conditions
 table(data$underlying_conditions_yn)
 
+#drop some columns that we don't need / don't know what they mean
+data <- data %>% select (-c(case_positive_specimen_interval, case_onset_interval,
+                            state_fips_code, ethnicity))
+
 data <- data %>% filter(!is.na(underlying_conditions_yn))
 #this gives us 1,477,201 rows
 
 #how many rows to we end up with if we filter out all of the missings we have
 
-data <- data %>% filter(!is.na(res_state) & !is.na(state_fips_code)
+data <- data %>% filter(!is.na(res_state)
                         & !is.na(res_county) & !is.na(county_fips_code)
                         & !is.na(age_group) & !is.na(sex)
-                        & !is.na(race) & !is.na(ethnicity)
-                        & !is.na(case_positive_specimen_interval) 
-                        & !is.na(case_onset_interval))
-#this gives us 775,712 rows, which really isn't that bad
+                        & !is.na(race))
+#this gives us 1,189,702 rows, which really isn't that bad
 
 #looking at the structure again
 str(data)
@@ -36,15 +38,14 @@ str(data)
 data <- data %>% filter((age_group != 'Unknown' & age_group != 'Missing') &
                         (sex != 'Unknown' & sex != 'Missing') &
                         (race != 'Unknown' & race != 'Missing') &
-                        (ethnicity != 'Unknown' & ethnicity != 'Missing') &
                         (process != 'Unknown' & process != 'Missing') &
                         (exposure_yn != 'Missing') &
                         (symptom_status != 'Unknown' & symptom_status != 'Missing') &
                         (hosp_yn != 'Unknown' & hosp_yn != 'Missing') &
                         (icu_yn != 'Unknown' & icu_yn != 'Missing'))
 
-#now removing all of these missing, we have 114,540 rows (which is still pretty good)
-114540 / 86000000
+#now removing all of these missing, we have 188,995 rows (which is still pretty good)
+188995 / 86000000
 #but I don't know if we should throw away 99.98% of our data??
 
 #anyway, let's see what we've got
