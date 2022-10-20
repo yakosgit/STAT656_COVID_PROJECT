@@ -73,4 +73,3 @@ table(data$year)
 table(data$month)
 
 #test changes2 - delete
-#test changes3 - delete
