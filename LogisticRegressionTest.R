@@ -1,5 +1,9 @@
+packs = c('dplyr','ggplot2', 'caret','corrplot', 'e1071','readr', 'pROC')
+lapply(packs,require,character.only=TRUE)
+
+dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
 dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
-dataSet     = read_csv(dataSetName)
+dataSet     = read_csv(file.path(dataSetPath,dataSetName))
 
 #check to see what is missing
 sapply(dataSet, function(x) sum(is.na(x)))
@@ -12,9 +16,7 @@ dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_in
 sapply(dataSet, function(x) sum(is.na(x)))
 
 #filtering out all these missings
-dataSet <- dataSet %>% filter(!is.na(res_state)
-                              & !is.na(res_county) & !is.na(county_fips_code)
-                              & !is.na(age_group) & !is.na(sex)
+dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex)
                               & !is.na(race))
 
 #check again for missing data
