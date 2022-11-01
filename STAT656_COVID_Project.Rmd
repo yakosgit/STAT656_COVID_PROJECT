@@ -34,7 +34,7 @@ items that usually need to be checked:
 * correlations
 
 ```{r Check data structures}
-str(dataSet)
+#str(dataSet)
 ```
 
 ```{r Check if any features have NA}
@@ -47,7 +47,27 @@ rbind(sapply(dataSet,function(x){ length(unique(x))}),
       sapply(dataSet,class))
 ```
 
-```{r plot hist}
+```{r plot feature, fig.align="center", echo = FALSE, fig.width = 12 }
+#plot(dataSet$hosp_yn)
+#barplot(dataSet$hosp_yn)
+require(gridExtra)
+theme_update(plot.title = element_text(hjust = 0.5))
+#options(repr.plot.width=30, repr.plot.height=30)
+
+colnames = names(dataSet[, sapply(dataSet, class) %in% c('character', 'factor')])[-c(1,2,3,4,5,16)]
+for (colname in colnames) {
+  
+  plot1 = ggplot(filter(dataSet,death_yn == "No" ), aes(x=reorder(.data[[colname]], .data[[colname]], function(x)-length(x)))) +
+    geom_bar() +  labs(x=colname) + labs(title = paste("Counts of", colname, "when:", "\n", "death_yn" , "=", "No" ))
+  
+  plot2 = ggplot(filter(dataSet,death_yn == "Yes" ), aes(x=reorder(.data[[colname]], .data[[colname]], function(x)-length(x)))) +
+    geom_bar() +  labs(x=colname) + labs(title = paste("Counts of", colname, "when:", "\n", "death_yn" , "=", "Yes" ))
+  
+  grid.arrange(plot1, plot2, ncol=2)
+  
+}
+
+
 
 ```
 
