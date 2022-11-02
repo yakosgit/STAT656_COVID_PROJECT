@@ -6,7 +6,7 @@ output:
 
 # Loading packages and Data
 ```{r loadingPackages}
-packs = c('dplyr','ggplot2', 'caret','corrplot', 'e1071','readr', 'pROC')
+packs = c('dplyr','ggplot2', 'caret','corrplot', 'e1071','readr', 'pROC', 'lubridate')
 lapply(packs,require,character.only=TRUE)
 ```
 
@@ -19,9 +19,10 @@ rm(list=ls())# Just to clean up the memory again
 # death_yn, age_group, hosp_yn,  underlying_conditions_yn, 
 
 # "dataSetPath" is the path to the directory on your PC where you  place the dataset csv file 
-dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
+#dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
+dataSetPathL = '../'
 dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
-dataSet     = read_csv(file.path(dataSetPath,dataSetName))
+dataSet     = read_csv(file.path(dataSetPathL,dataSetName))
 ```
 # Exploratory analysis
 items that usually need to be checked:
@@ -34,7 +35,7 @@ items that usually need to be checked:
 * correlations
 
 ```{r Check data structures}
-#str(dataSet)
+str(dataSet)
 ```
 
 ```{r Check if any features have NA}
@@ -71,10 +72,58 @@ for (colname in colnames) {
 
 ```
 
+Note from Laura: This underlying_conditions_yn column might be problematic
+
 ```{r Data structure and spliting}
 Y       = select(dataSet,death_yn) %>% unlist()
 X       = select(dataSet,-death_yn)
 ```
+
+# Loading in Vaccination Data as a potential predictor
+
+```{r load in the vaccination data}
+vaxSetPathL = '../'
+vaxSetName = 'COVID-19_Vaccinations_in_the_United_States_County.csv'
+vaxSet     = read_csv(file.path(vaxSetPathL,vaxSetName))
+```
+
+```{r filtering columns}
+#filtering out most of the columns and just keeping what we need
+vaxSet = vaxSet %>% select(c(Date, FIPS, Series_Complete_Pop_Pct, Census2019, Census2019_65PlusPop))
+
+```
+
+
+```{r formatting date to fit our COVID case dataset}
+vaxSet$Day = as.numeric(format(as.Date(vaxSet$Date,format="%m/%d/%Y"), format = "%d"))
+vaxSet$Date = format(as.Date(vaxSet$Date,format="%m/%d/%Y"), format = "%Y-%m")
+```
+
+I'm going to take the number from the end of the month in order to get it to work with our data
+
+```{r group by for each month}
+vaxSet = vaxSet %>% group_by(Date, FIPS) %>% summarize(Series_Complete_Pop_Pct = max(Series_Complete_Pop_Pct),
+                                                       Census2019 = max(Census2019),
+                                                       Census2019_65PlusPop = max(Census2019_65PlusPop))
+```
+
+```{r adjust date from original dataset}
+#adding the first to these dates so that we can use this as a date
+dataSet$case_month = as.Date(paste(dataSet$case_month,"-01",sep=""))
+```
+
+```{r adjust date from vax dataset}
+#this gives you the date where the vax data is considered to be valid 
+vaxSet$Date = as.Date(paste(vaxSet$Date,"-01",sep="")) %m+% months(1)
+```
+
+
+This is as far as I got. I have to figure out how to join this in 
+```{r}
+
+```
+
+
 
 # Building Models:
 
