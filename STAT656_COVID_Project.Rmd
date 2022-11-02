@@ -4,14 +4,14 @@ output:
   html_document: default
 ---
 
-# Loading packages and Data
+# Loading packages and Dataset
 ```{r loadingPackages}
 packs = c('dplyr','ggplot2', 'caret','corrplot', 'e1071','readr', 'pROC', 'lubridate')
 lapply(packs,require,character.only=TRUE)
 ```
 
-```{r loadingData}
-rm(list=ls())# Just to clean up the memory again
+```{r loadingData , cache = TRUE}
+#rm(list=ls())# Just to clean up the memory again
 
 # original data from (https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data-with-Ge/n8mc-b4w4) is ~85+ million rows and ~13GB file size
 
@@ -21,63 +21,69 @@ rm(list=ls())# Just to clean up the memory again
 # "dataSetPath" is the path to the directory on your PC where you  place the dataset csv file 
 #dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
 dataSetPathL = '../'
+dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
 dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
 dataSet     = read_csv(file.path(dataSetPathL,dataSetName))
 ```
-# Exploratory analysis
-items that usually need to be checked:
+# Exploratory Data Analysis
+Items that usually need to be checked:
 
-* data structures
-* checking for missing data
+* Data structures
+* Checking for missing data
 * Converting qualitative features to dummy variables
-* extreme observations
-* skewness/transformations
-* correlations
+* Extreme observations
+* Skewness/transformations
+* Correlations
 
+### Checking the overall structure and properties of the dataset
 ```{r Check data structures}
 str(dataSet)
 ```
-
-```{r Check if any features have NA}
-sapply(dataSet, function(x) sum(is.na(x)))
-
-```
-
 ```{r Check number of unique values}
 rbind(sapply(dataSet,function(x){ length(unique(x))}),
       sapply(dataSet,class))
 ```
 
-```{r plot feature, fig.align="center", echo = FALSE, fig.width = 12 }
-#plot(dataSet$hosp_yn)
-#barplot(dataSet$hosp_yn)
+### Checking for missing values
+```{r Check if any features have NA}
+sapply(dataSet, function(x) sum(is.na(x)))
+```
+
+### Creating conditional frequency plots and frequency tables
+- Here we build a function to loop through the categorical features a plot frequency charts of their levels conditioned on the levels of our response variable
+```{r plot feature, fig.align="center", fig.width = 12 , cache = TRUE}
 require(gridExtra)
 theme_update(plot.title = element_text(hjust = 0.5))
-#options(repr.plot.width=30, repr.plot.height=30)
 
-colnames = names(dataSet[, sapply(dataSet, class) %in% c('character', 'factor')])[-c(1,2,3,4,5,16)]
-for (colname in colnames) {
+# Extracting features that have "character" or "factor" type
+catFteaures = names(dataSet[, sapply(dataSet, class) %in% c('character', 'factor')])[-c(1,2,3,4,5,16)]
+
+# Loop through selected categorical features and plot 
+for (colname in catFteaures) {
   
-  plot1 = ggplot(filter(dataSet,death_yn == "No" ), aes(x=reorder(.data[[colname]], .data[[colname]], function(x)-length(x)))) +
-    geom_bar() +  labs(x=colname) + labs(title = paste("Counts of", colname, "when:", "\n", "death_yn" , "=", "No" ))
+  plot1 = ggplot(filter(dataSet,death_yn == "No" ), aes(x=reorder(.data[[colname]], .data[[colname]], function(x)-length(x)))) + geom_bar(fill="#3A5795") +  labs(x=colname) + labs(title = paste("Counts of", colname, "when:", "\n", "death_yn" , "=", "No" ))
   
-  plot2 = ggplot(filter(dataSet,death_yn == "Yes" ), aes(x=reorder(.data[[colname]], .data[[colname]], function(x)-length(x)))) +
-    geom_bar() +  labs(x=colname) + labs(title = paste("Counts of", colname, "when:", "\n", "death_yn" , "=", "Yes" ))
+  plot2 = ggplot(filter(dataSet,death_yn == "Yes" ), aes(x=reorder(.data[[colname]], .data[[colname]], function(x)-length(x)))) + geom_bar(fill="#c00000") +  labs(x=colname) + labs(title = paste("Counts of", colname, "when:", "\n", "death_yn" , "=", "Yes" ))
   
   grid.arrange(plot1, plot2, ncol=2)
-  
 }
 
-
+# Loop through selected categorical features and print frequency tables
+for (colname in catFteaures){
+  print(table(dataSet[colname]))
+  print("------------------------------")
+}
 
 ```
 
 Note from Laura: This underlying_conditions_yn column might be problematic
 
+
 ```{r Data structure and spliting}
 Y       = select(dataSet,death_yn) %>% unlist()
 X       = select(dataSet,-death_yn)
 ```
+
 
 # Loading in Vaccination Data as a potential predictor
 
@@ -126,6 +132,8 @@ This is as far as I got. I have to figure out how to join this in
 
 
 # Building Models:
+
+=======
 
 ```{r}
 #testing
