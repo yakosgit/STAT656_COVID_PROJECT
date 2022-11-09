@@ -79,12 +79,6 @@ for (colname in catFteaures){
 Note from Laura: This underlying_conditions_yn column might be problematic
 
 
-```{r Data structure and spliting}
-Y       = select(dataSet,death_yn) %>% unlist()
-X       = select(dataSet,-death_yn)
-```
-
-
 # Loading in Vaccination Data as a potential predictor
 
 ```{r load in the vaccination data}
@@ -115,7 +109,7 @@ vaxSet = vaxSet %>% group_by(Date, FIPS) %>% summarize(Series_Complete_Pop_Pct =
 
 ```{r adjust date from original dataset}
 #adding the first to these dates so that we can use this as a date
-dataSet$case_month = as.Date(paste(dataSet$case_month,"-01",sep=""))
+dataSet$vax_data_month = as.Date(paste(dataSet$case_month,"-01",sep=""))
 ```
 
 ```{r adjust date from vax dataset}
@@ -124,8 +118,64 @@ vaxSet$Date = as.Date(paste(vaxSet$Date,"-01",sep="")) %m+% months(1)
 ```
 
 
-This is as far as I got. I have to figure out how to join this in 
+Joining in the vaccination data and adding a roll-out indicator
 ```{r}
+#join where the date of the case is in the month where vaccination percentage is valid
+fullSet = dataSet %>% left_join(vaxSet, by=c('county_fips_code' = 'FIPS', 'vax_data_month' = 'Date'))
+
+#zero out entries before there was widespread vaccination roll-out
+fullSet$Series_Complete_Pop_Pct = ifelse(full_set$vax_data_month <= '2020-12-31', 0, full_set$Series_Complete_Pop_Pct)
+
+#create an indicator variable for vaccination roll-out
+fullSet$vax_rollout_indicator = ifelse(full_set$vax_data_month <= '2020-12-31', 0, 1)
+```
+
+```{r}
+
+```
+
+# Taking the states and grouping them into regions for potential predictors
+
+```{r}
+#filtering out Guam observations
+fullSet = fullSet %>% filter(res_state != 'GU', res_state != 'PR', res_state != 'VI')
+
+#Using the census-bureau designations: https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States#Census_Bureau-designated_regions_and_divisions
+
+fullSet$region = ifelse(fullSet$res_state %in% c('CT', 'ME', 'VT', 'NH', 'VT', 'MA', 'RI', 'NY', 'PA', 'NJ'), 'NorthEast',
+                        ifelse(fullSet$res_state %in% c('IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD'), 'Midwest',
+                               ifelse(fullSet$res_state %in% c('DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'DC', 'WV', 'AL', 'KY', 'MS', 'TN', 'AR', 'LA', 'OK', 'TX'), 'South',
+                                      ifelse(fullSet$res_state %in% c('AZ', 'CO', 'ID', 'MT', 'NV', 'NM', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA'), 'West', 'N/A'))))
+
+```
+
+
+# Prepping Data for Modeling:
+
+```{r data prep}
+#partition data into train / test split
+set.seed(13)
+trainingDataIndex <- createDataPartition(dataSet$death_yn, p=.7, list=FALSE)
+trainingData <- dataSet[trainingDataIndex,]
+testingData <- dataSet[-trainingDataIndex,]
+
+#split predictors and supervisor variable
+Xtrain <- select(trainingData, -death_yn)
+Xtest  <- select(testingData, -death_yn)
+Ytrain <- factor(select(trainingData, death_yn) %>% unlist())
+Ytest  <- factor(select(testingData, death_yn) %>% unlist())
+
+#train dummy model and apply to predictors
+#NOTE: this needs to be changed if we end up using some predictors that are not categorical
+dummyModel <- dummyVars(~ ., data= Xtrain, fullRank = TRUE)
+
+XtrainFull = predict(dummyModel, Xtrain)
+XtestFull = predict(dummyModel, Xtest)
+
+#We want to be explicit about what is the event and what is not, so we need to relevel
+#NOTE: I'm not sure about this, but I think we DON'T want the event as the reference category. This may be incorrect
+YtrainRelevel = relevel(Ytrain, ref = 'No')
+YtestRelevel = relevel(Ytest, ref = 'No')
 
 ```
 
@@ -135,20 +185,97 @@ This is as far as I got. I have to figure out how to join this in
 
 =======
 
-```{r}
-#testing again!
+```{r logistic regression model}
+#training logistic regression model
+trControl = trainControl(method = 'none')
+outLogistic = train(x = XtrainFull, y = YtrainRelevel,
+                    method = 'glm', trControl = trControl)
+
+YhatTestProb = predict(outLogistic, XtestFull, type = 'prob')
+
+```
+
+```{r logistic regression model}
+#generating the roc curve
+rocCurve = roc(Ytest, YhatTestProb$Yes)
+
+#plot the roc
+plot(rocCurve, legacy.axes=TRUE)
+
+rocCurve$auc
+```
+
+```{r logistic regression model}
+#find threshold by setting based on sensitivity or specificity
+thresholds = rocCurve$thresholds
+pt8 = max(which(rocCurve$sensitivities >= 0.80) )
+threshold = thresholds[pt8]
+specificity = rocCurve$specificities[pt8]
+sensitivity = rocCurve$sensitivities[pt8]
+
+YhatTestThresh = ifelse(YhatTestProb$Yes > threshold,
+                        'Yes', 'No') %>% as.factor
+
+confusionMatrixOut = confusionMatrix(reference = YtestRelevel, data = YhatTestThresh)
+confusionMatrixOut
 ```
 
 ```{r}
 
 ```
 
-```{r}
+```{r logistic elastic net}
+set.seed(13)
+K            = 10
+trainControl = trainControl(method = "cv", number = K)
+tuneGrid     = expand.grid('alpha'=c(0,.25,.5,.75,1),'lambda' = seq(00, .001, length.out = 30))
+
+elasticOut = train(x = XtrainFull, y = YtrainRelevel,
+                   method = "glmnet", 
+                   trControl = trainControl, tuneGrid = tuneGrid)
 
 ```
 
-```{r}
+```{r logistic elastic net}
+#starting to look at the output from the model
+elasticOut$finalModel$beta[,1:6]
+
+#best tune from the model
+elasticOut$bestTune
 
 ```
 
+```{r logistic elastic net}
+#re-train the model using the parameters from the best tune
+require(glmnet)
+glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainRelevel, s=elasticOut$bestTune$alpha, 
+                        family = 'binomial', standardize = FALSE)
+probHatTest    = predict(glmnetOut, XtestFull, s=elasticOut$bestTune$lambda, type='response')
+YhatTestGlmnet = ifelse(probHatTest > 0.035, 'Yes', 'No')
+```
+
+```{r logistic elastic net}
+#looking at the coefficients from the best tune
+betaHat = coef(glmnetOut, s=elasticOut$bestTune$lambda)
+betaHat
+
+#get the accuracy 
+mean(YhatTestGlmnet == YtestRelevel)
+```
+
+```{r logistic elastic net}
+#plot ROC curve and get AUC
+probHatTest = predict(elasticOut, XtestFull, s=elasticOut$bestTune$lambda, type = 'prob')
+rocOut = roc(response = YtestRelevel, probHatTest$Yes)
+
+plot(rocOut)
+
+rocOut$auc
+
+```
+
+```{r logistic elastic net}
+confusionMatrixOut = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet))
+confusionMatrixOut
+```
 
