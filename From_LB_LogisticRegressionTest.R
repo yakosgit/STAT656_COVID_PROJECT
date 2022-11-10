@@ -12,9 +12,8 @@ dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_in
 sapply(dataSet, function(x) sum(is.na(x)))
 
 #filtering out all these missings
-dataSet <- dataSet %>% filter(!is.na(res_state)
-                              & !is.na(res_county) & !is.na(county_fips_code)
-                              & !is.na(age_group) & !is.na(sex)
+dataSet <- dataSet %>% filter(
+                              !is.na(age_group) & !is.na(sex)
                               & !is.na(race))
 
 #check again for missing data
@@ -47,7 +46,7 @@ table(data$death_yn) #imbalanced classification problem. Might need to look into
 
 #lets create some training and testing data
 set.seed(13)
-trainingDataIndex <- createDataPartition(data$death_yn, p=.5, list=FALSE)
+trainingDataIndex <- createDataPartition(data$death_yn, p=.7, list=FALSE)
 trainingData <- data[trainingDataIndex,]
 testingData <- data[-trainingDataIndex,]
 

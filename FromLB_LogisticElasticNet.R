@@ -15,9 +15,7 @@ dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_in
 sapply(dataSet, function(x) sum(is.na(x)))
 
 #filtering out all these missings
-dataSet <- dataSet %>% filter(!is.na(res_state)
-                              & !is.na(res_county) & !is.na(county_fips_code)
-                              & !is.na(age_group) & !is.na(sex)
+dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex)
                               & !is.na(race))
 
 #check again for missing data
@@ -110,5 +108,7 @@ plot(rocOut)
 
 rocOut$auc
 
-confusionMatrixOut = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet))
+table(YhatTestGlmnet, YtestRelevel)
+
+confusionMatrixOut = confusionMatrix(reference = YtestRelevel, data = YhatTestGlmnet)
 confusionMatrixOut
