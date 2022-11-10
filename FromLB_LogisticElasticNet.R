@@ -110,5 +110,5 @@ rocOut$auc
 
 table(YhatTestGlmnet, YtestRelevel)
 
-confusionMatrixOut = confusionMatrix(reference = YtestRelevel, data = YhatTestGlmnet)
+confusionMatrixOut = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive='Yes')
 confusionMatrixOut
