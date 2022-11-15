@@ -87,9 +87,9 @@ invisible (lapply(packs,require,character.only=TRUE))
 # "dataSetPath" is the path variable to the directory on your PC where you place the dataset csv files 
 
 #Yako's Dataset Path
-dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
+#dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
 #Laura's Dataset Path
-#dataSetPath = '../'
+dataSetPath = '../'
 
 dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
 dataSet     = read_csv(file.path(dataSetPath,dataSetName))
@@ -231,6 +231,13 @@ outLogistic = train(x = XtrainFull, y = YtrainRelevel,
 YhatTestProbLR = predict(outLogistic, XtestFull, type = 'prob')
 
 ```
+Let's look at a calibration plot of our probabilities
+
+```{r}
+calibProbs = calibration(YtestRelevel ~ YhatTestProbLR$Yes, cuts = 5)
+xyplot(calibProbs)
+```
+
 
 ```{r ROC Curve of logistic regression model}
 #generating the roc curve
@@ -288,6 +295,14 @@ probHatTestGlmnet    = predict(glmnetOut, XtestFull, s=elasticOut$bestTune$lambd
 YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
 ```
 
+Let's make a calibration plot of our probabilities:
+
+```{r}
+calibProbsGLMnet = calibration(YtestRelevel ~ probHatTestGlmnet, cuts = 5)
+xyplot(calibProbsGLMnet)
+```
+
+
 ```{r logistic elastic net4}
 #looking at the coefficients from the best tune
 betaHatGlmnet = coef(glmnetOut, s=elasticOut$bestTune$lambda)
@@ -304,8 +319,6 @@ rocOutGlmnet = roc(response = YtestRelevel, probHatTestGlmnet$Yes)
 plot(rocCurveLR, legacy.axes=TRUE)
 plot(rocOutGlmnet, col = 'red', add = TRUE)
 
-# AUC Logistic Regression
-rocCurveLR$auc
 # AUC Logistic Elastic Net
 rocOutGlmnet$auc
 
@@ -314,6 +327,47 @@ rocOutGlmnet$auc
 ```{r logistic elastic net confusion matrix}
 confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive = "Yes")
 confusionMatrixOutGlmnet
+```
+
+# Applying the LDA model
+
+```{r}
+trControl = trainControl(method = 'none')
+outLDA = train(x = XtrainFull, y = YtrainRelevel,
+                    method = 'lda', trControl = trControl)
+
+YhatTestProbLDA = predict(outLDA, XtestFull, type = 'prob')
+```
+
+Let's look at a calibration plot of our probabilities:
+
+```{r}
+#calibration plot for the LDA model
+calibProbsLDA = calibration(YtestRelevel ~ YhatTestProbLDA$Yes, cuts = 5)
+xyplot(calibProbsLDA)
+
+```
+```{r}
+#generating the roc curve
+rocCurveLDA = roc(Ytest, YhatTestProbLDA$Yes)
+
+#plot the roc
+plot(rocCurveLDA, legacy.axes=TRUE)
+
+rocCurveLDA$auc
+```
+```{r}
+#find threshold for .8 sensitivey and generate confusion matrix
+thresholdsLDA = rocCurveLDA$thresholds
+pt8 = max(which(rocCurveLDA$sensitivities >= 0.80) )
+thresholdLDA = thresholdsLDA[pt8]
+specificityLDA = rocCurveLDA$specificities[pt8]
+sensitivityLDA = rocCurveLDA$sensitivities[pt8]
+
+YhatTestThreshLDA = ifelse(YhatTestProbLDA$Yes > thresholdLDA, 'Yes', 'No') %>% as.factor
+
+confusionMatrixOutLDA = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshLDA, positive = "Yes")
+confusionMatrixOutLDA
 ```
 
 
