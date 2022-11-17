@@ -6,7 +6,9 @@ output:
 
 # 1- Data Source Background, Discription and Loading
 
-### Background:
+### 1.1 Background:
+
+ - This project explores some Covind-19 datasets to find and select factors/signals to be used as predictors to a specific Covid related metric, such as death rate, hospitalization rate, infection rate, ect. The main focus is on classification of an individual case as death or not. The final goal is to use the selected factors/signals to build multiple statistical models using differet classification methods to generate desired predictions for the death metric 
 
  - COVID-19 Case Surveillance Public Use Data(of Deidentified Patient Case). It has 19 elements for all COVID-19 cases shared with CDC and includes demographics, geography, any exposure history, disease severity indicators and outcomes, and presence of any underlying medical conditions and risk behaviors.
 
@@ -15,7 +17,7 @@ output:
  - filtered data (https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data-with-Ge/n8mc-b4w4/data) is ~1.4+ million rows and ~200MB file size - removing (missing, NA, unknown) from the following columns:
  death_yn, age_group, hosp_yn,  underlying_conditions_yn
  
-### Column Discription:
+### 1.2 Column Discription:
 
 ### 1- case_month
 **The earlier of month the Clinical Date (date related to the illness or specimen collection) or the Date Received by CDC**
@@ -74,7 +76,7 @@ output:
 ### 19- underlying_conditions_yn
 **Did the patient have one or more of the underlying medical conditions and risk behaviors: diabetes mellitus, hypertension, severe obesity (BMI>40), cardiovascular disease, chronic renal disease, chronic liver disease, chronic lung disease, other chronic diseases, immunosuppressive condition, autoimmune condition, current smoker, former smoker, substance abuse or misuse, disability, psychological/psychiatric, pregnancy, other. [Yes, No, blank]**
 
-### Loading Packages and Data:
+### 1.3 Loading Packages and Data:
 
 ```{r loadingPackages , results="hide"}
 packs = c('dplyr','ggplot2', 'caret','corrplot', 'e1071','readr', 'pROC', 'lubridate')
@@ -106,21 +108,21 @@ Items that usually need to be checked:
 * Skewness/transformations
 * Correlations
 
-### Checking The Overall Structure and Properties of The Dataset
+### 2.1 Checking The Overall Structure and Properties of The Dataset
 ```{r Check data structures}
 str(dataSet)
 ```
-### Checking Number of Unique Values
+### 2.2 Checking Number of Unique Values
 ```{r Check number of unique values}
 rbind(sapply(dataSet,function(x){ length(unique(x))}),
       sapply(dataSet,class))
 ```
 
-### Checking For NA Values
+### 2.3 Checking For NA Values
 ```{r Check if any features have NA}
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
-### Droping Unwanted Columns
+### 2.4 Droping Unwanted Columns
 Reason for dropping:
  - case_positive_specimen_interval, case_onset_interval, ethnicity: Too many NA values
  - state_fips_code,res_county, county_fips_code, res_state        : Geography related. Excluding from initial analysis
@@ -128,7 +130,7 @@ Reason for dropping:
 dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_interval,
                                 state_fips_code, ethnicity, res_county, county_fips_code, res_state))
 ```
-### Checking For NA Values Again
+### 2.5 Checking For NA Values Again
 ```{r Check if remaining features have NA and cleaning them}
 sapply(dataSet, function(x) sum(is.na(x)))
 
@@ -136,7 +138,7 @@ sapply(dataSet, function(x) sum(is.na(x)))
 dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex) & !is.na(race))
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
-### Checking For Other Types of Missing Values 
+### 2.6 Checking For Other Types of Missing Values 
 ```{r Generating frquency tables}
 # Extracting features that have "character" or "factor" type
 catFteaures = names(dataSet[, sapply(dataSet, class) %in% c('character', 'factor')])
@@ -169,7 +171,7 @@ for (colname in catFteaures){
 }
 ```
 
-### Creating conditional frequency plots and frequency tables
+### 2.7 Creating conditional frequency plots and frequency tables
 - Here we build a function to loop through the categorical features and plot frequency charts of their levels conditioned on the levels of our response variable
 ```{r plot feature, fig.align="center", fig.width = 12, , cache = TRUE}
 require(gridExtra)
@@ -189,9 +191,9 @@ for (colname in catFteaures) {
 
 Note from Laura: This underlying_conditions_yn column might be problematic
 
-# Building Models:
+# 3- Building Models:
 
-### Train/Test Data spliting:
+### 2.1 Train/Test Data spliting:
 
 ```{r data spliting}
 #partition data into train / test split
@@ -225,7 +227,7 @@ YtrainRelevel = relevel(Ytrain, ref = 'No')
 YtestRelevel = relevel(Ytest, ref = 'No')
 ```
 
-### Applying Logistic Regression Model:
+### 3.2 Applying Logistic Regression Model:
 ```{r logistic regression model , cache = TRUE}
 #training logistic regression model
 trControl = trainControl(method = 'none')
@@ -268,7 +270,7 @@ confusionMatrixOutLR = confusionMatrix(reference = YtestRelevel, data = YhatTest
 confusionMatrixOutLR
 ```
 
-### Applying Logistic Elastic Net Model:
+### 3.3 Applying Logistic Elastic Net Model:
 ```{r logistic elastic net , cache = TRUE}
 set.seed(13)
 K            = 10
@@ -283,7 +285,7 @@ elasticOut = train(x = XtrainFull, y = YtrainRelevel,
 
 ```{r logistic elastic net best tune}
 #starting to look at the output from the model
-elasticOut$finalModel$beta[,1:6]
+#elasticOut$finalModel$beta[,1:6]
 
 #best tune from the model
 elasticOut$bestTune
@@ -331,7 +333,7 @@ confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.f
 confusionMatrixOutGlmnet
 ```
 
-### Applying the LDA model
+### 3.4 Applying the LDA model
 
 ```{r LDA model}
 trControl = trainControl(method = 'none')
@@ -364,7 +366,7 @@ rocCurveLDA$auc
 ```
 
 ```{r LDA model confusion matrix }
-#find threshold for .8 sensitivey and generate confusion matrix
+#find threshold for .8 sensitivity and generate confusion matrix
 thresholdsLDA = rocCurveLDA$thresholds
 pt8 = max(which(rocCurveLDA$sensitivities >= 0.80) )
 thresholdLDA = thresholdsLDA[pt8]
