@@ -4,13 +4,17 @@ output:
   html_document: default
 ---
 
-# 1- Data Source Background, Discription and Loading
+
+
+# **1- Data Source Background, Discription and Loading**
 
 ### 1.1 Background:
 
- - This project explores some Covind-19 datasets to find and select factors/signals to be used as predictors to a specific Covid related metric, such as death rate, hospitalization rate, infection rate, ect. The main focus is on classification of an individual case as death or not. The final goal is to use the selected factors/signals to build multiple statistical models using differet classification methods to generate desired predictions for the death metric 
-
- - COVID-19 Case Surveillance Public Use Data(of Deidentified Patient Case). It has 19 elements for all COVID-19 cases shared with CDC and includes demographics, geography, any exposure history, disease severity indicators and outcomes, and presence of any underlying medical conditions and risk behaviors.
+ - This project explores COVID-19 Case Surveillance Public Use Data(of Deidentified Patient Case). The Dataset has 19 elements for all COVID-19 cases shared with CDC and includes demographics, geography, any exposure history, disease severity indicators and outcomes, and presence of any underlying medical conditions and risk behaviors.
+ 
+ - The main scientific question we are trying to answer is whether a COVID death can be predicted and how accurately by using features/factors/signals related to each case as predictors in multiple different classification models and techniques. We are also interested in finding which factor(s) have the most impact (significance) in determining whether a COVID case would result in death or not
+ 
+ - As we continue to work with our model, we plan on doing additional feature engineering and potentially bringing data corresponding to vaccination prevalence in the patient’s community and additional information about pre-existing conditions
 
  - The original data from (https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data-with-Ge/n8mc-b4w4) has ~85+ million rows and ~13GB file size
  
@@ -19,61 +23,61 @@ output:
  
 ### 1.2 Column Discription:
 
-### 1- case_month
+#### 1- case_month
 **The earlier of month the Clinical Date (date related to the illness or specimen collection) or the Date Received by CDC**
 
-### 2- res_state
+#### 2- res_state
 **State of residence**
 
-### 3- state_fips_code
+#### 3- state_fips_code
 **State FIPS code**
 
-### 4- res_county
+#### 4- res_county
 **County of residence**
 
-### 5- county_fips_code
+#### 5- county_fips_code
 **County FIPS code**
 
-### 6- age_group
+#### 6- age_group
 **Age group [0 - 17 years; 18 - 49 years; 50 - 64 years; 65 + years; Unknown; Missing; NA, if value suppressed for privacy protection.]**
 
-### 7- sex
+#### 7- sex
 **Sex [Female; Male; Other; Unknown; Missing; NA, if value suppressed for privacy protection.]**
 
-### 8- race
+#### 8- race
 **Race [American Indian/Alaska Native; Asian; Black; Multiple/Other; Native Hawaiian/Other Pacific Islander; White; Unknown; Missing; NA, if value suppressed for privacy protection.]**
 
-### 9- ethnicity
+#### 9- ethnicity
 **Ethnicity [Hispanic; Non-Hispanic; Unknown; Missing; NA, if value suppressed for privacy protection.]**
 
-### 10- case_positive_specimen_interval
+#### 10- case_positive_specimen_interval
 **Weeks between earliest date and date of first positive specimen collection Number**
 
-### 11- case_onset_interval
+#### 11- case_onset_interval
 **Weeks between earliest date and date of symptom onset. Number**
 
-### 12- process
+#### 12- process
 **Under what process was the case first identified? [Clinical evaluation; Routine surveillance; Contact tracing of case patient; Multiple; Other; Unknown; Missing]**
 
-### 13- exposure_yn
+#### 13- exposure_yn
 **In the 14 days prior to illness onset, did the patient have any of the following known exposures: domestic travel, international travel, cruise ship or vessel travel as a passenger or crew member, workplace, airport/airplane, adult congregate living facility (nursing, assisted living, or long-term care facility), school/university/childcare center, correctional facility, community event/mass gathering, animal with confirmed or suspected COVID-19, other exposure, contact with a known COVID-19 case? [Yes, Unknown, Missing]**
 
-### 14- current_status
+#### 14- current_status
 **What is the current status of this person? [Laboratory-confirmed case, Probable case]**
 
-### 15- symptom_status
+#### 15- symptom_status
 **What is the symptom status of this person? [Asymptomatic, Symptomatic, Unknown, Missing]**
 
-### 16- hosp_yn
+#### 16- hosp_yn
 **Was the patient hospitalized? [Yes, No, Unknown, Missing]**
 
-### 17- icu_yn
+#### 17- icu_yn
 **Was the patient admitted to an intensive care unit (ICU)? [Yes, No, Unknown, Missing]**
 
-### 18- death_yn
+#### 18- death_yn
 **Did the patient die as a result of this illness? [Yes; No; Unknown; Missing; NA, if value suppressed for privacy protection.]**
 
-### 19- underlying_conditions_yn
+#### 19- underlying_conditions_yn
 **Did the patient have one or more of the underlying medical conditions and risk behaviors: diabetes mellitus, hypertension, severe obesity (BMI>40), cardiovascular disease, chronic renal disease, chronic liver disease, chronic lung disease, other chronic diseases, immunosuppressive condition, autoimmune condition, current smoker, former smoker, substance abuse or misuse, disability, psychological/psychiatric, pregnancy, other. [Yes, No, blank]**
 
 ### 1.3 Loading Packages and Data:
@@ -98,7 +102,7 @@ dataSet     = read_csv(file.path(dataSetPath,dataSetName))
 head(dataSet, 3)
 ```
 
-# 2- Exploratory Data Analysis
+# **2- Exploratory Data Analysis**
 Items that usually need to be checked:
 
 * Data structures
@@ -124,7 +128,9 @@ sapply(dataSet, function(x) sum(is.na(x)))
 ```
 ### 2.4 Droping Unwanted Columns
 Reason for dropping:
+
  - case_positive_specimen_interval, case_onset_interval, ethnicity: Too many NA values
+ 
  - state_fips_code,res_county, county_fips_code, res_state        : Geography related. Excluding from initial analysis
 ```{r Droping Unwanted Columns}
 dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_interval,
@@ -191,7 +197,7 @@ for (colname in catFteaures) {
 
 Note from Laura: This underlying_conditions_yn column might be problematic
 
-# 3- Building Models:
+# **3- Building Models**
 
 ### 2.1 Train/Test Data spliting:
 
