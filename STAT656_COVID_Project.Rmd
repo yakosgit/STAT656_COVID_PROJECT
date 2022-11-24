@@ -93,9 +93,9 @@ invisible (lapply(packs,require,character.only=TRUE))
 # "dataSetPath" is the path variable to the directory on your PC where you place the dataset csv files 
 
 #Yako's Dataset Path
-dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
+#dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
 #Laura's Dataset Path
-#dataSetPath = '../'
+dataSetPath = '../'
 
 dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
 dataSet     = read_csv(file.path(dataSetPath,dataSetName))
@@ -460,3 +460,4 @@ fullSet$region = ifelse(fullSet$res_state %in% c('CT', 'ME', 'VT', 'NH', 'VT', '
 
 ```
 
+Testing
