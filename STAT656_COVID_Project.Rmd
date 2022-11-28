@@ -126,6 +126,22 @@ rbind(sapply(dataSet,function(x){ length(unique(x))}),
 ```{r Check if any features have NA}
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
+### 2.3.2 adding in regional coding
+
+```{r}
+#filtering out Guam observations
+dataSet = dataSet %>% filter(res_state != 'GU', res_state != 'PR', res_state != 'VI')
+
+#Using the census-bureau designations: https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States#Census_Bureau-designated_regions_and_divisions
+
+dataSet$region = ifelse(dataSet$res_state %in% c('CT', 'ME', 'VT', 'NH', 'VT', 'MA', 'RI', 'NY', 'PA', 'NJ'), 'NorthEast',
+                        ifelse(dataSet$res_state %in% c('IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD'), 'Midwest',
+                               ifelse(dataSet$res_state %in% c('DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'DC', 'WV', 'AL', 'KY', 'MS', 'TN', 'AR', 'LA', 'OK', 'TX'), 'South',
+                                      ifelse(dataSet$res_state %in% c('AZ', 'CO', 'ID', 'MT', 'NV', 'NM', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA'), 'West', 'N/A'))))
+
+```
+
+
 ### 2.4 Droping Unwanted Columns
 Reason for dropping:
 
@@ -134,14 +150,14 @@ Reason for dropping:
  - state_fips_code,res_county, county_fips_code, res_state        : Geography related. Excluding from initial analysis
 ```{r Droping Unwanted Columns}
 dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_interval,
-                                state_fips_code, ethnicity, res_county, county_fips_code, res_state))
+                                state_fips_code, ethnicity, res_county, res_state))
 ```
 ### 2.5 Checking For NA Values Again
 ```{r Check if remaining features have NA and cleaning them}
 sapply(dataSet, function(x) sum(is.na(x)))
 
 #filtering out all these NAs
-dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex) & !is.na(race))
+dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex) & !is.na(race) & !is.na(county_fips_code))
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
 ### 2.6 Checking For Other Types of Missing Values 
@@ -197,6 +213,62 @@ for (colname in catFteaures) {
 
 Note from Laura: This underlying_conditions_yn column might be problematic
 
+# Loading in Vaccination Data as a potential predictor
+
+```{r load in the vaccination data , cache = TRUE}
+# vaxSetPathL = '../' Note from Yako: lets use same "dataSetPath" variable name for all so that we don't have to change in through out the code 
+vaxSetName = 'COVID-19_Vaccinations_in_the_United_States_County.csv'
+vaxSet     = read_csv(file.path(dataSetPath,vaxSetName))
+```
+
+```{r filtering columns}
+#filtering out most of the columns and just keeping what we need
+vaxSet = vaxSet %>% select(c(Date, FIPS, Series_Complete_Pop_Pct, Census2019, Census2019_65PlusPop))
+
+```
+
+
+```{r formatting date to fit our COVID case dataset}
+vaxSet$Day = as.numeric(format(as.Date(vaxSet$Date,format="%m/%d/%Y"), format = "%d"))
+vaxSet$Date = format(as.Date(vaxSet$Date,format="%m/%d/%Y"), format = "%Y-%m")
+```
+
+I'm going to take the number from the end of the month in order to get it to work with our data
+
+```{r group by for each month}
+vaxSet = vaxSet %>% group_by(Date, FIPS) %>% summarize(Series_Complete_Pop_Pct = max(Series_Complete_Pop_Pct),
+                                                       Census2019 = max(Census2019),
+                                                       Census2019_65PlusPop = max(Census2019_65PlusPop))
+```
+
+```{r adjust date from original dataset}
+#adding the first to these dates so that we can use this as a date
+dataSet$vax_data_month = as.Date(paste(dataSet$case_month,"-01",sep=""))
+```
+
+```{r adjust date from vax dataset}
+#this gives you the date where the vax data is considered to be valid 
+vaxSet$Date = as.Date(paste(vaxSet$Date,"-01",sep="")) %m+% months(1)
+```
+
+
+Joining in the vaccination data and adding a roll-out indicator
+```{r}
+#join where the date of the case is in the month where vaccination percentage is valid
+fullSet = dataSet %>% left_join(vaxSet, by=c('county_fips_code' = 'FIPS', 'vax_data_month' = 'Date'))
+
+#zero out entries before there was widespread vaccination roll-out
+fullSet$Series_Complete_Pop_Pct = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, fullSet$Series_Complete_Pop_Pct)
+
+#create an indicator variable for vaccination roll-out
+fullSet$vax_rollout_indicator = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, 1)
+```
+
+```{r}
+dataSet = fullSet %>% select(-c(county_fips_code, Census2019, Census2019_65PlusPop))
+```
+
+
 # **3- Building Models**
 
 ### 2.1 Train/Test Data spliting:
@@ -222,10 +294,20 @@ Ytest  <- factor(select(testingData, death_yn) %>% unlist())
 ```{r catagorical feature dummy encoding}
 #train dummy model and apply to predictors
 #NOTE: this needs to be changed if we end up using some predictors that are not categorical
-dummyModel <- dummyVars(~ ., data= Xtrain, fullRank = TRUE)
+XtrainQuant = Xtrain %>% select(Series_Complete_Pop_Pct)
+XtestQuant = Xtest %>% select(Series_Complete_Pop_Pct)
+XtrainQual = Xtrain %>% select(-c(Series_Complete_Pop_Pct))
+XtestQual = Xtest %>% select(-c(Series_Complete_Pop_Pct))
 
-XtrainFull = predict(dummyModel, Xtrain)
-XtestFull = predict(dummyModel, Xtest)
+
+dummyModel <- dummyVars(~ ., data= XtrainQual, fullRank = TRUE)
+
+XtrainD = predict(dummyModel, XtrainQual)
+XtestD = predict(dummyModel, XtestQual)
+
+XtrainFull = cbind(XtrainD, XtrainQuant)
+XtestFull = cbind(XtestD, XtestQuant)
+
 
 #We want to be explicit about what is the event and what is not, so we need to relevel
 #NOTE: I'm not sure about this, but I think we DON'T want the event as the reference category. This may be incorrect
@@ -246,7 +328,7 @@ YhatTestProbLR = predict(outLogistic, XtestFull, type = 'prob')
 Let's look at a calibration plot of our probabilities
 
 ```{r logistic regression model calibration plot}
-calibProbs = calibration(YtestRelevel ~ YhatTestProbLR$No, cuts = 5)
+calibProbs = calibration(YtestRelevel ~ YhatTestProbLR$Yes, cuts = 5)
 xyplot(calibProbs)
 ```
 
@@ -303,14 +385,14 @@ elasticOut$bestTune
 require(glmnet)
 glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainRelevel, s=elasticOut$bestTune$alpha, 
                         family = 'binomial', standardize = FALSE)
-probHatTestGlmnet   = predict(glmnetOut, XtestFull, s=elasticOut$bestTune$lambda, type='response')
+probHatTestGlmnet   = predict(glmnetOut, as.matrix(XtrainFull), s=elasticOut$bestTune$lambda, type='response')
 YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
 ```
 
 Let's make a calibration plot of our probabilities:
 
 ```{r logistic elastic net calibration plot}
-calibProbsGLMnet = calibration(YtestRelevel ~ probHatTestGlmnet, cuts = 5)
+calibProbsGLMnet = calibration(YtrainRelevel ~ probHatTestGlmnet, cuts = 5)
 xyplot(calibProbsGLMnet)
 ```
 
@@ -335,6 +417,8 @@ rocOutGlmnet$auc
 ```
 
 ```{r logistic elastic net confusion matrix}
+YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
+
 confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive = "Yes")
 confusionMatrixOutGlmnet
 ```
@@ -390,74 +474,4 @@ confusionMatrixOutLDA
 knitr::knit_exit()
 ```
 
-# Loading in Vaccination Data as a potential predictor
 
-```{r load in the vaccination data , cache = TRUE}
-# vaxSetPathL = '../' Note from Yako: lets use same "dataSetPath" variable name for all so that we don't have to change in through out the code 
-vaxSetName = 'COVID-19_Vaccinations_in_the_United_States_County.csv'
-vaxSet     = read_csv(file.path(dataSetPath,vaxSetName))
-```
-
-```{r filtering columns}
-#filtering out most of the columns and just keeping what we need
-vaxSet = vaxSet %>% select(c(Date, FIPS, Series_Complete_Pop_Pct, Census2019, Census2019_65PlusPop))
-
-```
-
-
-```{r formatting date to fit our COVID case dataset}
-vaxSet$Day = as.numeric(format(as.Date(vaxSet$Date,format="%m/%d/%Y"), format = "%d"))
-vaxSet$Date = format(as.Date(vaxSet$Date,format="%m/%d/%Y"), format = "%Y-%m")
-```
-
-I'm going to take the number from the end of the month in order to get it to work with our data
-
-```{r group by for each month}
-vaxSet = vaxSet %>% group_by(Date, FIPS) %>% summarize(Series_Complete_Pop_Pct = max(Series_Complete_Pop_Pct),
-                                                       Census2019 = max(Census2019),
-                                                       Census2019_65PlusPop = max(Census2019_65PlusPop))
-```
-
-```{r adjust date from original dataset}
-#adding the first to these dates so that we can use this as a date
-dataSet$vax_data_month = as.Date(paste(dataSet$case_month,"-01",sep=""))
-```
-
-```{r adjust date from vax dataset}
-#this gives you the date where the vax data is considered to be valid 
-vaxSet$Date = as.Date(paste(vaxSet$Date,"-01",sep="")) %m+% months(1)
-```
-
-
-Joining in the vaccination data and adding a roll-out indicator
-```{r}
-#join where the date of the case is in the month where vaccination percentage is valid
-fullSet = dataSet %>% left_join(vaxSet, by=c('county_fips_code' = 'FIPS', 'vax_data_month' = 'Date'))
-
-#zero out entries before there was widespread vaccination roll-out
-fullSet$Series_Complete_Pop_Pct = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, fullSet$Series_Complete_Pop_Pct)
-
-#create an indicator variable for vaccination roll-out
-fullSet$vax_rollout_indicator = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, 1)
-```
-
-```{r}
-
-```
-
-# Taking the states and grouping them into regions for potential predictors
-
-```{r}
-#filtering out Guam observations
-fullSet = fullSet %>% filter(res_state != 'GU', res_state != 'PR', res_state != 'VI')
-
-#Using the census-bureau designations: https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States#Census_Bureau-designated_regions_and_divisions
-
-fullSet$region = ifelse(fullSet$res_state %in% c('CT', 'ME', 'VT', 'NH', 'VT', 'MA', 'RI', 'NY', 'PA', 'NJ'), 'NorthEast',
-                        ifelse(fullSet$res_state %in% c('IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD'), 'Midwest',
-                               ifelse(fullSet$res_state %in% c('DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'DC', 'WV', 'AL', 'KY', 'MS', 'TN', 'AR', 'LA', 'OK', 'TX'), 'South',
-                                      ifelse(fullSet$res_state %in% c('AZ', 'CO', 'ID', 'MT', 'NV', 'NM', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA'), 'West', 'N/A'))))
-
-```
-
-Testing
