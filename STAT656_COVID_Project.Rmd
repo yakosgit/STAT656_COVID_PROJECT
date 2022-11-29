@@ -265,7 +265,7 @@ fullSet$vax_rollout_indicator = ifelse(fullSet$vax_data_month <= '2020-12-31', 0
 ```
 
 ```{r}
-dataSet = fullSet %>% select(-c(county_fips_code, Census2019, Census2019_65PlusPop))
+dataSet = fullSet %>% select(-c(county_fips_code, Census2019, Census2019_65PlusPop, vax_data_month))
 ```
 
 
@@ -279,6 +279,10 @@ set.seed(13)
 trainingDataIndex <- createDataPartition(dataSet$death_yn, p=.7, list=FALSE)
 trainingData <- dataSet[trainingDataIndex,]
 testingData <- dataSet[-trainingDataIndex,]
+
+#downsampling the training data
+#trainingDataNo = trainingData %>% filter(death_yn == 'No')
+#trainingDataYes = trainingData %>% filter(death_yn == 'Yes')
 
 #split predictors and supervisor variable
 Xtrain <- select(trainingData, -death_yn)
@@ -310,9 +314,9 @@ XtestFull = cbind(XtestD, XtestQuant)
 
 
 #We want to be explicit about what is the event and what is not, so we need to relevel
-#NOTE: I'm not sure about this, but I think we DON'T want the event as the reference category. This may be incorrect
-YtrainRelevel = relevel(Ytrain, ref = 'No')
-YtestRelevel = relevel(Ytest, ref = 'No')
+#In the lecture on imbalanced data, prof said that the reference category is treated as the event in the caret package
+YtrainRelevel = relevel(Ytrain, ref = 'Yes')
+YtestRelevel = relevel(Ytest, ref = 'Yes')
 ```
 
 ### 3.2 Applying Logistic Regression Model:
@@ -347,7 +351,7 @@ rocCurveLR$auc
 ```{r confusion matrix logistic regression model}
 #find threshold by setting based on sensitivity or specificity
 thresholdsLR = rocCurveLR$thresholds
-pt8 = max(which(rocCurveLR$sensitivities >= 0.80) )
+pt8 = max(which(rocCurveLR$sensitivities >= 0.8) )
 thresholdLR = thresholdsLR[pt8]
 specificityLR = rocCurveLR$specificities[pt8]
 sensitivityLR = rocCurveLR$sensitivities[pt8]
@@ -361,9 +365,9 @@ confusionMatrixOutLR
 ### 3.3 Applying Logistic Elastic Net Model:
 ```{r logistic elastic net , cache = TRUE}
 set.seed(13)
-K            = 10
+K            = 5
 trainControl = trainControl(method = "cv", number = K)
-tuneGrid     = expand.grid('alpha'=c(0,.25,.5,.75,1),'lambda' = seq(00, .001, length.out = 30))
+tuneGrid     = expand.grid('alpha'=c(0,.25,.5,.75,1),'lambda' = seq(0, .002, length.out = 15))
 
 elasticOut = train(x = XtrainFull, y = YtrainRelevel,
                    method = "glmnet", 
@@ -382,9 +386,13 @@ elasticOut$bestTune
 
 ```{r logistic elastic net retrain with best tune , cache = TRUE}
 #re-train the model using the parameters from the best tune
+#releveling the glmnet supervisor because otherwise it doesn't make sense
 require(glmnet)
-glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainRelevel, s=elasticOut$bestTune$alpha, 
+YtrainGLMNet = relevel(YtrainRelevel, ref = 'No')
+glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainGLMNet, s=elasticOut$bestTune$alpha, 
                         family = 'binomial', standardize = FALSE)
+
+
 probHatTestGlmnet   = predict(glmnetOut, as.matrix(XtrainFull), s=elasticOut$bestTune$lambda, type='response')
 YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
 ```
@@ -406,7 +414,7 @@ betaHatGlmnet
 ```{r logistic elastic net ROC Curve}
 #plot ROC curve and get AUC
 probHatTestGlmnet = predict(elasticOut, XtestFull, s=elasticOut$bestTune$lambda, type = 'prob')
-rocOutGlmnet = roc(response = YtestRelevel, probHatTestGlmnet$Yes)
+rocOutGlmnet = roc(response = Ytest, probHatTestGlmnet$Yes)
 plot(rocCurveLR, legacy.axes=TRUE)
 plot(rocOutGlmnet, col = 'red', add = TRUE)
 legend(0.2,0.3, legend=c("LR", "Elastic Net"), col=c("black", "red"), lty = 1, lwd = 3)
@@ -417,7 +425,7 @@ rocOutGlmnet$auc
 ```
 
 ```{r logistic elastic net confusion matrix}
-YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
+YhatTestGlmnet = ifelse(probHatTestGlmnet$Yes > 0.035, 'Yes', 'No')
 
 confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive = "Yes")
 confusionMatrixOutGlmnet
@@ -437,7 +445,7 @@ Let's look at a calibration plot of our probabilities:
 
 ```{r LDA model calibration plot}
 #calibration plot for the LDA model
-calibProbsLDA = calibration(YtestRelevel ~ YhatTestProbLDA$No, cuts = 5)
+calibProbsLDA = calibration(YtestRelevel ~ YhatTestProbLDA$Yes, cuts = 5)
 xyplot(calibProbsLDA)
 
 ```
