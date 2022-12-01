@@ -125,6 +125,22 @@ rbind(sapply(dataSet,function(x){ length(unique(x))}),
 ```{r Check if any features have NA}
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
+### 2.3.2 adding in regional coding
+
+```{r}
+#filtering out Guam observations
+dataSet = dataSet %>% filter(res_state != 'GU', res_state != 'PR', res_state != 'VI')
+
+#Using the census-bureau designations: https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States#Census_Bureau-designated_regions_and_divisions
+
+dataSet$region = ifelse(dataSet$res_state %in% c('CT', 'ME', 'VT', 'NH', 'VT', 'MA', 'RI', 'NY', 'PA', 'NJ'), 'NorthEast',
+                        ifelse(dataSet$res_state %in% c('IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD'), 'Midwest',
+                               ifelse(dataSet$res_state %in% c('DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'DC', 'WV', 'AL', 'KY', 'MS', 'TN', 'AR', 'LA', 'OK', 'TX'), 'South',
+                                      ifelse(dataSet$res_state %in% c('AZ', 'CO', 'ID', 'MT', 'NV', 'NM', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA'), 'West', 'N/A'))))
+
+```
+
+
 ### 2.4 Droping Unwanted Columns
 Reason for dropping:
 
@@ -133,14 +149,14 @@ Reason for dropping:
  - state_fips_code,res_county, county_fips_code, res_state        : Geography related. Excluding from initial analysis
 ```{r Droping Unwanted Columns}
 dataSet <- dataSet %>% select (-c(case_positive_specimen_interval, case_onset_interval,
-                                state_fips_code, ethnicity, res_county, county_fips_code, res_state))
+                                state_fips_code, ethnicity, res_county, res_state))
 ```
 ### 2.5 Checking For NA Values Again
 ```{r Check if remaining features have NA and cleaning them}
 sapply(dataSet, function(x) sum(is.na(x)))
 
 #filtering out all these NAs
-dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex) & !is.na(race))
+dataSet <- dataSet %>% filter(!is.na(age_group) & !is.na(sex) & !is.na(race) & !is.na(county_fips_code))
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
 ### 2.6 Checking For Other Types of Missing Values 
@@ -196,199 +212,6 @@ for (colname in catFteaures) {
 
 Note from Laura: This underlying_conditions_yn column might be problematic
 
-# **3- Building Models**
-
-### 2.1 Train/Test Data spliting:
-
-```{r data spliting}
-#partition data into train / test split
-set.seed(13)
-trainingDataIndex <- createDataPartition(dataSet$death_yn, p=.7, list=FALSE)
-trainingData <- dataSet[trainingDataIndex,]
-testingData <- dataSet[-trainingDataIndex,]
-
-#split predictors and supervisor variable
-Xtrain <- select(trainingData, -death_yn)
-Xtest  <- select(testingData, -death_yn)
-# ?? Note: do we need to convert X to factors as well like the example below from lectures?
-#Xtrain = select(Xtrain, MONTH, OP_UNIQUE_CARRIER) %>% mutate_all(factor)
-#Xtest = select(Xtest, MONTH, OP_UNIQUE_CARRIER) %>% mutate_all(factor)
-
-Ytrain <- factor(select(trainingData, death_yn) %>% unlist())
-Ytest  <- factor(select(testingData, death_yn) %>% unlist())
-```
-
-```{r catagorical feature dummy encoding}
-#train dummy model and apply to predictors
-#NOTE: this needs to be changed if we end up using some predictors that are not categorical
-dummyModel <- dummyVars(~ ., data= Xtrain, fullRank = TRUE)
-
-XtrainFull = predict(dummyModel, Xtrain)
-XtestFull = predict(dummyModel, Xtest)
-
-#We want to be explicit about what is the event and what is not, so we need to relevel
-#NOTE: I'm not sure about this, but I think we DON'T want the event as the reference category. This may be incorrect
-YtrainRelevel = relevel(Ytrain, ref = 'No')
-YtestRelevel = relevel(Ytest, ref = 'No')
-```
-
-### 3.2 Applying Logistic Regression Model:
-```{r logistic regression model , cache = TRUE}
-#training logistic regression model
-trControl = trainControl(method = 'none')
-outLogistic = train(x = XtrainFull, y = YtrainRelevel,
-                    method = 'glm', trControl = trControl)
-
-YhatTestProbLR = predict(outLogistic, XtestFull, type = 'prob')
-
-```
-Let's look at a calibration plot of our probabilities
-
-```{r logistic regression model calibration plot}
-calibProbs = calibration(YtestRelevel ~ YhatTestProbLR$No, cuts = 5)
-xyplot(calibProbs)
-```
-
-
-```{r ROC Curve of logistic regression model}
-#generating the roc curve
-rocCurveLR = roc(Ytest, YhatTestProbLR$Yes)
-
-#plot the roc
-plot(rocCurveLR, legacy.axes=TRUE)
-
-rocCurveLR$auc
-
-```
-
-```{r confusion matrix logistic regression model}
-#find threshold by setting based on sensitivity or specificity
-thresholdsLR = rocCurveLR$thresholds
-pt8 = max(which(rocCurveLR$sensitivities >= 0.80) )
-thresholdLR = thresholdsLR[pt8]
-specificityLR = rocCurveLR$specificities[pt8]
-sensitivityLR = rocCurveLR$sensitivities[pt8]
-
-YhatTestThreshLR = ifelse(YhatTestProbLR$Yes > thresholdLR, 'Yes', 'No') %>% as.factor
-
-confusionMatrixOutLR = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshLR, positive = "Yes")
-confusionMatrixOutLR
-```
-
-### 3.3 Applying Logistic Elastic Net Model:
-```{r logistic elastic net , cache = TRUE}
-set.seed(13)
-K            = 10
-trainControl = trainControl(method = "cv", number = K)
-tuneGrid     = expand.grid('alpha'=c(0,.25,.5,.75,1),'lambda' = seq(00, .001, length.out = 30))
-
-elasticOut = train(x = XtrainFull, y = YtrainRelevel,
-                   method = "glmnet", 
-                   trControl = trainControl, tuneGrid = tuneGrid)
-
-```
-
-```{r logistic elastic net best tune}
-#starting to look at the output from the model
-#elasticOut$finalModel$beta[,1:6]
-
-#best tune from the model
-elasticOut$bestTune
-
-```
-
-```{r logistic elastic net retrain with best tune , cache = TRUE}
-#re-train the model using the parameters from the best tune
-require(glmnet)
-glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainRelevel, s=elasticOut$bestTune$alpha, 
-                        family = 'binomial', standardize = FALSE)
-probHatTestGlmnet   = predict(glmnetOut, XtestFull, s=elasticOut$bestTune$lambda, type='response')
-YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
-```
-
-Let's make a calibration plot of our probabilities:
-
-```{r logistic elastic net calibration plot}
-calibProbsGLMnet = calibration(YtestRelevel ~ probHatTestGlmnet, cuts = 5)
-xyplot(calibProbsGLMnet)
-```
-
-
-```{r logistic elastic net coefficients}
-#looking at the coefficients from the best tune
-betaHatGlmnet = coef(glmnetOut, s=elasticOut$bestTune$lambda)
-betaHatGlmnet
-```
-
-```{r logistic elastic net ROC Curve}
-#plot ROC curve and get AUC
-probHatTestGlmnet = predict(elasticOut, XtestFull, s=elasticOut$bestTune$lambda, type = 'prob')
-rocOutGlmnet = roc(response = YtestRelevel, probHatTestGlmnet$Yes)
-plot(rocCurveLR, legacy.axes=TRUE)
-plot(rocOutGlmnet, col = 'red', add = TRUE)
-legend(0.2,0.3, legend=c("LR", "Elastic Net"), col=c("black", "red"), lty = 1, lwd = 3)
-
-# AUC Logistic Elastic Net
-rocOutGlmnet$auc
-
-```
-
-```{r logistic elastic net confusion matrix}
-confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive = "Yes")
-confusionMatrixOutGlmnet
-```
-
-### 3.4 Applying the LDA model
-
-```{r LDA model}
-trControl = trainControl(method = 'none')
-outLDA = train(x = XtrainFull, y = YtrainRelevel,
-                    method = 'lda', trControl = trControl)
-
-YhatTestProbLDA = predict(outLDA, XtestFull, type = 'prob')
-```
-
-Let's look at a calibration plot of our probabilities:
-
-```{r LDA model calibration plot}
-#calibration plot for the LDA model
-calibProbsLDA = calibration(YtestRelevel ~ YhatTestProbLDA$No, cuts = 5)
-xyplot(calibProbsLDA)
-
-```
-
-```{r LDA model ROC Curve}
-#generating the roc curve
-rocCurveLDA = roc(Ytest, YhatTestProbLDA$Yes)
-
-#plot the roc
-plot(rocCurveLR, legacy.axes=TRUE)
-plot(rocOutGlmnet, col = 'red', add = TRUE)
-plot(rocCurveLDA, col = 'blue', add = TRUE)
-legend(0.2,0.3, legend=c("LR", "Elastic Net",  "LDA"), col=c("black", "red", "blue"), lty = 1, lwd = 3)
-
-rocCurveLDA$auc
-```
-
-```{r LDA model confusion matrix }
-#find threshold for .8 sensitivity and generate confusion matrix
-thresholdsLDA = rocCurveLDA$thresholds
-pt8 = max(which(rocCurveLDA$sensitivities >= 0.80) )
-thresholdLDA = thresholdsLDA[pt8]
-specificityLDA = rocCurveLDA$specificities[pt8]
-sensitivityLDA = rocCurveLDA$sensitivities[pt8]
-
-YhatTestThreshLDA = ifelse(YhatTestProbLDA$Yes > thresholdLDA, 'Yes', 'No') %>% as.factor
-
-confusionMatrixOutLDA = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshLDA, positive = "Yes")
-confusionMatrixOutLDA
-```
-
-
-```{r knit stop}
-knitr::knit_exit()
-```
-
 # Loading in Vaccination Data as a potential predictor
 
 ```{r load in the vaccination data , cache = TRUE}
@@ -441,22 +264,221 @@ fullSet$vax_rollout_indicator = ifelse(fullSet$vax_data_month <= '2020-12-31', 0
 ```
 
 ```{r}
+dataSet = fullSet %>% select(-c(county_fips_code, Census2019, Census2019_65PlusPop, vax_data_month))
+```
+
+
+# **3- Building Models**
+
+### 2.1 Train/Test Data spliting:
+
+```{r data spliting}
+#partition data into train / test split
+set.seed(13)
+trainingDataIndex <- createDataPartition(dataSet$death_yn, p=.7, list=FALSE)
+trainingData <- dataSet[trainingDataIndex,]
+testingData <- dataSet[-trainingDataIndex,]
+
+#downsampling the training data
+#trainingDataNo = trainingData %>% filter(death_yn == 'No')
+#trainingDataYes = trainingData %>% filter(death_yn == 'Yes')
+
+#split predictors and supervisor variable
+Xtrain <- select(trainingData, -death_yn)
+Xtest  <- select(testingData, -death_yn)
+# ?? Note: do we need to convert X to factors as well like the example below from lectures?
+#Xtrain = select(Xtrain, MONTH, OP_UNIQUE_CARRIER) %>% mutate_all(factor)
+#Xtest = select(Xtest, MONTH, OP_UNIQUE_CARRIER) %>% mutate_all(factor)
+
+Ytrain <- factor(select(trainingData, death_yn) %>% unlist())
+Ytest  <- factor(select(testingData, death_yn) %>% unlist())
+```
+
+```{r catagorical feature dummy encoding}
+#train dummy model and apply to predictors
+#NOTE: this needs to be changed if we end up using some predictors that are not categorical
+XtrainQuant = Xtrain %>% select(Series_Complete_Pop_Pct)
+XtestQuant = Xtest %>% select(Series_Complete_Pop_Pct)
+XtrainQual = Xtrain %>% select(-c(Series_Complete_Pop_Pct))
+XtestQual = Xtest %>% select(-c(Series_Complete_Pop_Pct))
+
+
+dummyModel <- dummyVars(~ ., data= XtrainQual, fullRank = TRUE)
+
+XtrainD = predict(dummyModel, XtrainQual)
+XtestD = predict(dummyModel, XtestQual)
+
+XtrainFull = cbind(XtrainD, XtrainQuant)
+XtestFull = cbind(XtestD, XtestQuant)
+
+
+#We want to be explicit about what is the event and what is not, so we need to relevel
+#In the lecture on imbalanced data, prof said that the reference category is treated as the event in the caret package
+YtrainRelevel = relevel(Ytrain, ref = 'Yes')
+YtestRelevel = relevel(Ytest, ref = 'Yes')
+```
+
+### 3.2 Applying Logistic Regression Model:
+```{r logistic regression model , cache = TRUE}
+#training logistic regression model
+trControl = trainControl(method = 'none')
+outLogistic = train(x = XtrainFull, y = YtrainRelevel,
+                    method = 'glm', trControl = trControl)
+
+YhatTestProbLR = predict(outLogistic, XtestFull, type = 'prob')
+
+```
+Let's look at a calibration plot of our probabilities
+
+```{r logistic regression model calibration plot}
+calibProbs = calibration(YtestRelevel ~ YhatTestProbLR$Yes, cuts = 5)
+xyplot(calibProbs)
+```
+
+
+```{r ROC Curve of logistic regression model}
+#generating the roc curve
+rocCurveLR = roc(Ytest, YhatTestProbLR$Yes)
+
+#plot the roc
+plot(rocCurveLR, legacy.axes=TRUE)
+
+rocCurveLR$auc
 
 ```
 
-# Taking the states and grouping them into regions for potential predictors
+```{r confusion matrix logistic regression model}
+#find threshold by setting based on sensitivity or specificity
+thresholdsLR = rocCurveLR$thresholds
+pt8 = max(which(rocCurveLR$sensitivities >= 0.8) )
+thresholdLR = thresholdsLR[pt8]
+specificityLR = rocCurveLR$specificities[pt8]
+sensitivityLR = rocCurveLR$sensitivities[pt8]
 
-```{r}
-#filtering out Guam observations
-fullSet = fullSet %>% filter(res_state != 'GU', res_state != 'PR', res_state != 'VI')
+YhatTestThreshLR = ifelse(YhatTestProbLR$Yes > thresholdLR, 'Yes', 'No') %>% as.factor
 
-#Using the census-bureau designations: https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States#Census_Bureau-designated_regions_and_divisions
+confusionMatrixOutLR = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshLR, positive = "Yes")
+confusionMatrixOutLR
+```
 
-fullSet$region = ifelse(fullSet$res_state %in% c('CT', 'ME', 'VT', 'NH', 'VT', 'MA', 'RI', 'NY', 'PA', 'NJ'), 'NorthEast',
-                        ifelse(fullSet$res_state %in% c('IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD'), 'Midwest',
-                               ifelse(fullSet$res_state %in% c('DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'DC', 'WV', 'AL', 'KY', 'MS', 'TN', 'AR', 'LA', 'OK', 'TX'), 'South',
-                                      ifelse(fullSet$res_state %in% c('AZ', 'CO', 'ID', 'MT', 'NV', 'NM', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA'), 'West', 'N/A'))))
+### 3.3 Applying Logistic Elastic Net Model:
+```{r logistic elastic net , cache = TRUE}
+set.seed(13)
+K            = 5
+trainControl = trainControl(method = "cv", number = K)
+tuneGrid     = expand.grid('alpha'=c(0,.25,.5,.75,1),'lambda' = seq(0, .002, length.out = 15))
+
+elasticOut = train(x = XtrainFull, y = YtrainRelevel,
+                   method = "glmnet", 
+                   trControl = trainControl, tuneGrid = tuneGrid)
 
 ```
 
-Testing
+```{r logistic elastic net best tune}
+#starting to look at the output from the model
+#elasticOut$finalModel$beta[,1:6]
+
+#best tune from the model
+elasticOut$bestTune
+
+```
+
+```{r logistic elastic net retrain with best tune , cache = TRUE}
+#re-train the model using the parameters from the best tune
+#releveling the glmnet supervisor because otherwise it doesn't make sense
+require(glmnet)
+YtrainGLMNet = relevel(YtrainRelevel, ref = 'No')
+glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainGLMNet, s=elasticOut$bestTune$alpha, 
+                        family = 'binomial', standardize = FALSE)
+
+
+probHatTestGlmnet   = predict(glmnetOut, as.matrix(XtrainFull), s=elasticOut$bestTune$lambda, type='response')
+YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
+```
+
+Let's make a calibration plot of our probabilities:
+
+```{r logistic elastic net calibration plot}
+calibProbsGLMnet = calibration(YtrainRelevel ~ probHatTestGlmnet, cuts = 5)
+xyplot(calibProbsGLMnet)
+```
+
+
+```{r logistic elastic net coefficients}
+#looking at the coefficients from the best tune
+betaHatGlmnet = coef(glmnetOut, s=elasticOut$bestTune$lambda)
+betaHatGlmnet
+```
+
+```{r logistic elastic net ROC Curve}
+#plot ROC curve and get AUC
+probHatTestGlmnet = predict(elasticOut, XtestFull, s=elasticOut$bestTune$lambda, type = 'prob')
+rocOutGlmnet = roc(response = Ytest, probHatTestGlmnet$Yes)
+plot(rocCurveLR, legacy.axes=TRUE)
+plot(rocOutGlmnet, col = 'red', add = TRUE)
+legend(0.2,0.3, legend=c("LR", "Elastic Net"), col=c("black", "red"), lty = 1, lwd = 3)
+
+# AUC Logistic Elastic Net
+rocOutGlmnet$auc
+
+```
+
+```{r logistic elastic net confusion matrix}
+YhatTestGlmnet = ifelse(probHatTestGlmnet$Yes > 0.035, 'Yes', 'No')
+
+confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive = "Yes")
+confusionMatrixOutGlmnet
+```
+
+### 3.4 Applying the LDA model
+
+```{r LDA model}
+trControl = trainControl(method = 'none')
+outLDA = train(x = XtrainFull, y = YtrainRelevel,
+                    method = 'lda', trControl = trControl)
+
+YhatTestProbLDA = predict(outLDA, XtestFull, type = 'prob')
+```
+
+Let's look at a calibration plot of our probabilities:
+
+```{r LDA model calibration plot}
+#calibration plot for the LDA model
+calibProbsLDA = calibration(YtestRelevel ~ YhatTestProbLDA$Yes, cuts = 5)
+xyplot(calibProbsLDA)
+
+```
+
+```{r LDA model ROC Curve}
+#generating the roc curve
+rocCurveLDA = roc(Ytest, YhatTestProbLDA$Yes)
+
+#plot the roc
+plot(rocCurveLR, legacy.axes=TRUE)
+plot(rocOutGlmnet, col = 'red', add = TRUE)
+plot(rocCurveLDA, col = 'blue', add = TRUE)
+legend(0.2,0.3, legend=c("LR", "Elastic Net",  "LDA"), col=c("black", "red", "blue"), lty = 1, lwd = 3)
+
+rocCurveLDA$auc
+```
+
+```{r LDA model confusion matrix }
+#find threshold for .8 sensitivity and generate confusion matrix
+thresholdsLDA = rocCurveLDA$thresholds
+pt8 = max(which(rocCurveLDA$sensitivities >= 0.80) )
+thresholdLDA = thresholdsLDA[pt8]
+specificityLDA = rocCurveLDA$specificities[pt8]
+sensitivityLDA = rocCurveLDA$sensitivities[pt8]
+
+YhatTestThreshLDA = ifelse(YhatTestProbLDA$Yes > thresholdLDA, 'Yes', 'No') %>% as.factor
+
+confusionMatrixOutLDA = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshLDA, positive = "Yes")
+confusionMatrixOutLDA
+```
+
+
+```{r knit stop}
+knitr::knit_exit()
+```
+
+
