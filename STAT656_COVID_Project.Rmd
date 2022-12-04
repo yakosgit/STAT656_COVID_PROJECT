@@ -260,7 +260,7 @@ fullSet = dataSet %>% left_join(vaxSet, by=c('county_fips_code' = 'FIPS', 'vax_d
 fullSet$Series_Complete_Pop_Pct = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, fullSet$Series_Complete_Pop_Pct)
 
 #create an indicator variable for vaccination roll-out
-fullSet$vax_rollout_indicator = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, 1)
+#fullSet$vax_rollout_indicator = ifelse(fullSet$vax_data_month <= '2020-12-31', 0, 1)
 ```
 
 ```{r}
