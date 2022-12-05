@@ -506,9 +506,6 @@ YhatTestBoostKappa = predict(boostKappaOut, XtestFull)
 YhatTestBoost      = predict(boostOut, XtestFull)
 
 
-table(YhatTestBoost,YtestRelevel)
-table(YhatTestBoostKappa,YtestRelevel)
-
 confusionMatrixOutBoost = confusionMatrix(reference = YtestRelevel, data = YhatTestBoost, positive = "Yes")
 confusionMatrixOutBoost
 confusionMatrixOutBoostKappa = confusionMatrix(reference = YtestRelevel, data = YhatTestBoostKappa, positive = "Yes")
@@ -527,6 +524,9 @@ rfOut   = train(x = XtrainFull, y = YtrainRelevel,
                      metric = 'Kappa',
                      trControl = trControl)
 YhatTestRf  = predict(rfOut, XtestFull)
+
+confusionMatrixOutRF = confusionMatrix(reference = YtestRelevel, data = YhatTestRf, positive = "Yes")
+confusionMatrixOutRF
 ```
 
 
