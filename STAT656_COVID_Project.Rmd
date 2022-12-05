@@ -477,6 +477,7 @@ confusionMatrixOutLDA
 ```
 
 
+
 # **4- Remedies for Severe Class Imbalance**
 
 ### 4.1 Training with kappa for Severe Class Imbalance
@@ -517,6 +518,20 @@ plot(rocOut, print.thres = c(.1,.25,.5),
      legacy.axes = TRUE, print.thres.cex=.65)
 table(Yhat,Ytest)
 
+```
+### 4.3 Random Forest via the Ranger package
+
+```{r Random Forest}
+tuneGrid = data.frame('mtry' = 1:2,
+                      'splitrule' = 'gini',
+                      'min.node.size' = 1)
+
+rfOut   = train(x = XtrainDf, y = Ytrain,
+                     method = "ranger", 
+                     tuneGrid = tuneGrid,
+                     metric = 'Kappa',
+                     trControl = trControl)
+YhatRf  = predict(rfOut, XtestDf)
 ```
 
 
