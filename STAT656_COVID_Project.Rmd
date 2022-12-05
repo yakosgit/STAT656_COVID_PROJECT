@@ -477,6 +477,49 @@ confusionMatrixOutLDA
 ```
 
 
+# **4- Remedies for Severe Class Imbalance**
+
+### 4.1 Training with kappa for Severe Class Imbalance
+
+```{r Training with kappa}
+trControl = trainControl(method = 'cv')
+tuneGrid = data.frame('nrounds'= seq(100,500,length.out = 10),
+                        'max_depth' = 2,
+                        'eta' = .01,
+                        'gamma' = 0,
+                        'colsample_bytree' = 1,
+                        'min_child_weight' = 0,
+                        'subsample' = .5)
+boostKappaOut = train(x = XtrainDf, y = Ytrain,
+                     method = "xgbTree", 
+                     tuneGrid = tuneGrid,
+                     metric = 'Kappa',
+                     trControl = trControl)
+boostOut      = train(x = XtrainDf, y = Ytrain,
+                     method = "xgbTree", 
+                     tuneGrid = tuneGrid,
+                     metric = 'Accuracy',
+                     trControl = trControl)
+Yhat      = predict(boostOut, XtestDf)
+YhatKappa = predict(boostKappaOut, XtestDf)
+
+table(Yhat,Ytest)
+table(YhatKappa,Ytest)
+```
+
+### 4.2 Adjusting threshold
+```{r Adjusting threshold}
+require(pROC)
+
+pHat   = predict(boostOut, XtestDf, type = 'prob')
+rocOut = roc(Ytest,pHat[,1],levels=c('0','1'))
+plot(rocOut, print.thres = c(.1,.25,.5), 
+     legacy.axes = TRUE, print.thres.cex=.65)
+table(Yhat,Ytest)
+
+```
+
+
 ```{r knit stop}
 knitr::knit_exit()
 ```
