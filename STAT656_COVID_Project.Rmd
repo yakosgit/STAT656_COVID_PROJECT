@@ -92,9 +92,9 @@ invisible (lapply(packs,require,character.only=TRUE))
 # "dataSetPath" is the path variable to the directory on your PC where you place the dataset csv files 
 
 #Yako's Dataset Path
-#dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
+dataSetPath = '/home/yako/Desktop/TAMU_STAT/STAT656_Applied Analytics/STAT656FinalProject/Datasets'
 #Laura's Dataset Path
-dataSetPath = '../'
+#dataSetPath = '../'
 
 dataSetName = 'COVID-19_Case_Surveillance_Public_Use_Data_with_Geography_Filterd.csv'
 dataSet     = read_csv(file.path(dataSetPath,dataSetName))
@@ -482,7 +482,7 @@ confusionMatrixOutLDA
 
 ### 4.1 Training with kappa for Severe Class Imbalance
 
-```{r Training with kappa}
+```{r Training with kappa  , cache = TRUE}
 trControl = trainControl(method = 'cv')
 tuneGrid = data.frame('nrounds'= seq(100,500,length.out = 10),
                         'max_depth' = 2,
@@ -491,48 +491,57 @@ tuneGrid = data.frame('nrounds'= seq(100,500,length.out = 10),
                         'colsample_bytree' = 1,
                         'min_child_weight' = 0,
                         'subsample' = .5)
-boostKappaOut = train(x = XtrainDf, y = Ytrain,
+boostKappaOut = train(x = XtrainFull, y = YtrainRelevel,
                      method = "xgbTree", 
                      tuneGrid = tuneGrid,
                      metric = 'Kappa',
                      trControl = trControl)
-boostOut      = train(x = XtrainDf, y = Ytrain,
+boostOut      = train(x = XtrainFull, y = YtrainRelevel,
                      method = "xgbTree", 
                      tuneGrid = tuneGrid,
                      metric = 'Accuracy',
                      trControl = trControl)
-Yhat      = predict(boostOut, XtestDf)
-YhatKappa = predict(boostKappaOut, XtestDf)
 
-table(Yhat,Ytest)
-table(YhatKappa,Ytest)
+YhatTestBoostKappa = predict(boostKappaOut, XtestFull)
+YhatTestBoost      = predict(boostOut, XtestFull)
+
+
+table(YhatTestBoost,YtestRelevel)
+table(YhatTestBoostKappa,YtestRelevel)
+
+confusionMatrixOutBoost = confusionMatrix(reference = YtestRelevel, data = YhatTestBoost, positive = "Yes")
+confusionMatrixOutBoost
+confusionMatrixOutBoostKappa = confusionMatrix(reference = YtestRelevel, data = YhatTestBoostKappa, positive = "Yes")
+confusionMatrixOutBoostKappa
 ```
+### 4.2 Random Forest via the Ranger package
 
-### 4.2 Adjusting threshold
-```{r Adjusting threshold}
-require(pROC)
-
-pHat   = predict(boostOut, XtestDf, type = 'prob')
-rocOut = roc(Ytest,pHat[,1],levels=c('0','1'))
-plot(rocOut, print.thres = c(.1,.25,.5), 
-     legacy.axes = TRUE, print.thres.cex=.65)
-table(Yhat,Ytest)
-
-```
-### 4.3 Random Forest via the Ranger package
-
-```{r Random Forest}
+```{r Random Forest  , cache = TRUE}
 tuneGrid = data.frame('mtry' = 1:2,
                       'splitrule' = 'gini',
                       'min.node.size' = 1)
 
-rfOut   = train(x = XtrainDf, y = Ytrain,
+rfOut   = train(x = XtrainFull, y = YtrainRelevel,
                      method = "ranger", 
                      tuneGrid = tuneGrid,
                      metric = 'Kappa',
                      trControl = trControl)
-YhatRf  = predict(rfOut, XtestDf)
+YhatTestRf  = predict(rfOut, XtestFull)
 ```
+
+
+### 4.3 Adjusting threshold
+```{r Adjusting threshold}
+require(pROC)
+
+pHat   = predict(boostOut, XtestFull, type = 'prob')
+rocOut = roc(YtestRelevel,pHat[,1],levels=c('0','1'))
+plot(rocOut, print.thres = c(.1,.25,.5), 
+     legacy.axes = TRUE, print.thres.cex=.65)
+table(YhatTestBoost,YtestRelevel)
+
+```
+
 
 
 ```{r knit stop}
