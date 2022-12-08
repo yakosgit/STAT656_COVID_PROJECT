@@ -336,18 +336,15 @@ xyplot(calibProbs)
 ```
 
 
-```{r ROC Curve of logistic regression model}
+```{r logistic regression model ROC Curve}
 #generating the roc curve
 rocCurveLR = roc(Ytest, YhatTestProbLR$Yes)
-
 #plot the roc
 plot(rocCurveLR, legacy.axes=TRUE)
-
 rocCurveLR$auc
-
 ```
 
-```{r confusion matrix logistic regression model}
+```{r logistic regression model confusion matrix }
 #find threshold by setting based on sensitivity or specificity
 thresholdsLR = rocCurveLR$thresholds
 pt8 = max(which(rocCurveLR$sensitivities >= 0.8) )
@@ -362,7 +359,7 @@ confusionMatrixOutLR
 ```
 
 ### 3.3 Applying Logistic Elastic Net Model:
-```{r logistic elastic net , cache = TRUE}
+```{r logistic elastic net model, cache = TRUE}
 set.seed(13)
 K            = 5
 trainControl = trainControl(method = "cv", number = K)
@@ -392,14 +389,13 @@ glmnetOut      = glmnet(x = as.matrix(XtrainFull), y = YtrainGLMNet, s=elasticOu
                         family = 'binomial', standardize = FALSE)
 
 
-probHatTestGlmnet   = predict(glmnetOut, as.matrix(XtrainFull), s=elasticOut$bestTune$lambda, type='response')
-YhatTestGlmnet = ifelse(probHatTestGlmnet > 0.035, 'Yes', 'No')
+YhatTestProbGlmnet  = predict(glmnetOut, as.matrix(XtestFull), s=elasticOut$bestTune$lambda, type = 'response')
 ```
 
 Let's make a calibration plot of our probabilities:
 
 ```{r logistic elastic net calibration plot}
-calibProbsGLMnet = calibration(YtrainRelevel ~ probHatTestGlmnet, cuts = 5)
+calibProbsGLMnet = calibration(YtestRelevel ~ YhatTestProbGlmnet, cuts = 5)
 xyplot(calibProbsGLMnet)
 ```
 
@@ -413,26 +409,32 @@ betaHatGlmnet
 ```{r logistic elastic net ROC Curve}
 #plot ROC curve and get AUC
 probHatTestGlmnet = predict(elasticOut, XtestFull, s=elasticOut$bestTune$lambda, type = 'prob')
-rocOutGlmnet = roc(response = Ytest, probHatTestGlmnet$Yes)
+rocCurveGlmnet = roc(response = Ytest, probHatTestGlmnet$Yes)
 plot(rocCurveLR, legacy.axes=TRUE)
-plot(rocOutGlmnet, col = 'red', add = TRUE)
+plot(rocCurveGlmnet, col = 'red', add = TRUE)
 legend(0.2,0.3, legend=c("LR", "Elastic Net"), col=c("black", "red"), lty = 1, lwd = 3)
 
 # AUC Logistic Elastic Net
-rocOutGlmnet$auc
+rocCurveGlmnet$auc
 
 ```
 
 ```{r logistic elastic net confusion matrix}
-YhatTestGlmnet = ifelse(probHatTestGlmnet$Yes > 0.035, 'Yes', 'No')
+thresholdsGlmnet= rocCurveGlmnet$thresholds
+pt8 = max(which(rocCurveGlmnet$sensitivities >= 0.8) )
+thresholdGlmnet = thresholdsGlmnet[pt8]
+specificityGlmnet = rocCurveGlmnet$specificities[pt8]
+sensitivityGlmnet = rocCurveGlmnet$sensitivities[pt8]
 
-confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestGlmnet), positive = "Yes")
+YhatTestThreshGlmnet = ifelse(probHatTestGlmnet$Yes> thresholdGlmnet, 'Yes', 'No') %>% as.factor
+
+confusionMatrixOutGlmnet = confusionMatrix(reference = YtestRelevel, data = as.factor(YhatTestThreshGlmnet), positive = "Yes")
 confusionMatrixOutGlmnet
 ```
 
 ### 3.4 Applying the LDA model
 
-```{r LDA model}
+```{r LDA model  , cache = TRUE}
 trControl = trainControl(method = 'none')
 outLDA = train(x = XtrainFull, y = YtrainRelevel,
                     method = 'lda', trControl = trControl)
@@ -476,44 +478,61 @@ confusionMatrixOutLDA = confusionMatrix(reference = YtestRelevel, data = YhatTes
 confusionMatrixOutLDA
 ```
 
+### 3.5 Applying the Pruned Tree model
+```{r Pruned Tree Model  , cache = TRUE}
+tuneGrid = expand.grid(cp = c(0.001, 0.01, 0.1))
+trControl = trainControl(method = "repeatedcv", repeats = 2, number = 10)
+rpartOut = train(x = XtrainFull, 
+                 y = YtrainRelevel,
+                 method = "rpart",
+                 tuneGrid = tuneGrid,
+                 trControl = trControl)
+
+plot(rpartOut$finalModel,margin= rep(.03,10))
+text(rpartOut$finalModel, cex = 0.5, digits = 10)
 
 
-# **4- Remedies for Severe Class Imbalance**
-
-### 4.1 Training with kappa for Severe Class Imbalance
-
-```{r Training with kappa  , cache = TRUE}
-trControl = trainControl(method = 'cv')
-tuneGrid = data.frame('nrounds'= seq(100,500,length.out = 10),
-                        'max_depth' = 2,
-                        'eta' = .01,
-                        'gamma' = 0,
-                        'colsample_bytree' = 1,
-                        'min_child_weight' = 0,
-                        'subsample' = .5)
-boostKappaOut = train(x = XtrainFull, y = YtrainRelevel,
-                     method = "xgbTree", 
-                     tuneGrid = tuneGrid,
-                     metric = 'Kappa',
-                     trControl = trControl)
-boostOut      = train(x = XtrainFull, y = YtrainRelevel,
-                     method = "xgbTree", 
-                     tuneGrid = tuneGrid,
-                     metric = 'Accuracy',
-                     trControl = trControl)
-
-YhatTestBoostKappa = predict(boostKappaOut, XtestFull)
-YhatTestBoost      = predict(boostOut, XtestFull)
-
-
-confusionMatrixOutBoost = confusionMatrix(reference = YtestRelevel, data = YhatTestBoost, positive = "Yes")
-confusionMatrixOutBoost
-confusionMatrixOutBoostKappa = confusionMatrix(reference = YtestRelevel, data = YhatTestBoostKappa, positive = "Yes")
-confusionMatrixOutBoostKappa
+YhatTestProbTree      = predict(rpartOut, XtestFull, type = 'prob')
 ```
-### 4.2 Random Forest via the Ranger package
 
-```{r Random Forest  , cache = TRUE}
+```{r Pruned Tree model calibration plot}
+calibProbsTree = calibration(YtestRelevel ~ YhatTestProbTree$Yes, cuts = 5)
+xyplot(calibProbsTree)
+```
+
+```{r Pruned Tree model ROC Curve}
+#generating the roc curve
+pHatTree   = predict(rpartOut, XtestFull, type = 'prob')
+rocCurveTree = roc(Ytest, pHatTree[,1])
+
+#plot the roc
+plot(rocCurveLR, legacy.axes=TRUE)
+plot(rocOutGlmnet, col = 'red', add = TRUE)
+plot(rocCurveLDA, col = 'blue', add = TRUE)
+plot(rocCurveTree, col = 'green', add = TRUE)
+legend(0.2,0.5, legend=c("LR", "Elastic Net",  "LDA", "Tree"), col=c("black", "red", "blue", "green"), lty = 1, lwd = 3)
+
+rocCurveTree$auc
+```
+
+```{r Pruned Tree model confusion matrix}
+
+thresholdsTree = rocCurveTree$thresholds
+pt8 = max(which(rocCurveTree$sensitivities >= 0.80) )
+thresholdTree = thresholdsTree[pt8]
+specificityTree = rocCurveTree$specificities[pt8]
+sensitivityTree = rocCurveTree$sensitivities[pt8]
+
+YhatTestThreshTree = ifelse(pHatTree$Yes > thresholdTree, 'Yes', 'No') %>% as.factor
+
+confusionMatrixOutTree = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshTree, positive = "Yes")
+confusionMatrixOutTree
+```
+
+### 3.6 Applying the Random Forest Model
+
+```{r Random Forest Model , cache = TRUE}
+trControl = trainControl(method = "repeatedcv", repeats = 2, number = 10, classProbs = TRUE)
 tuneGrid = data.frame('mtry' = 1:2,
                       'splitrule' = 'gini',
                       'min.node.size' = 1)
@@ -523,29 +542,107 @@ rfOut   = train(x = XtrainFull, y = YtrainRelevel,
                      tuneGrid = tuneGrid,
                      metric = 'Kappa',
                      trControl = trControl)
-YhatTestRf  = predict(rfOut, XtestFull)
+YhatTestProbRf  = predict(rfOut, XtestFull, type = 'prob')
 
-confusionMatrixOutRF = confusionMatrix(reference = YtestRelevel, data = YhatTestRf, positive = "Yes")
+```
+
+```{r Rando Forest model calibration plot}
+calibProbsRF = calibration(YtestRelevel ~ YhatTestProbRf$Yes, cuts = 5)
+xyplot(calibProbsRF)
+```
+
+```{r Random Forest model ROC Curve}
+#generating the roc curve
+pHatRF  = predict(rfOut, XtestFull, type = 'prob')
+rocCurveRF = roc(Ytest, pHatRF[,1])
+
+#plot the roc
+plot(rocCurveLR, legacy.axes=TRUE)
+plot(rocOutGlmnet, col = 'red', add = TRUE)
+plot(rocCurveLDA, col = 'blue', add = TRUE)
+plot(rocCurveTree, col = 'green', add = TRUE)
+plot(rocCurveRF, col = 'yellow', add = TRUE)
+legend(0.2,0.5, legend=c("LR", "Elastic Net",  "LDA", "Tree", "Random Forest"), col=c("black", "red", "blue", "green", "yellow"), lty = 1, lwd = 3)
+
+rocCurveTree$auc
+```
+
+```{r Random Forest model confusion matrix}
+
+thresholdsRF = rocCurveRF$thresholds
+pt8 = max(which(rocCurveRF$sensitivities >= 0.80) )
+thresholdRF = thresholdsRF[pt8]
+specificityRF = rocCurveRF$specificities[pt8]
+sensitivityRF = rocCurveRF$sensitivities[pt8]
+
+YhatTestThreshRF = ifelse(pHatRF$Yes > thresholdRF, 'Yes', 'No') %>% as.factor
+
+confusionMatrixOutRF = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshRF, positive = "Yes")
 confusionMatrixOutRF
 ```
 
+### 3.5 Applying the Boosting model
+```{r Training with kappa  , cache = TRUE}
+#trControl = trainControl(method = 'cv')
+tuneGrid = data.frame('nrounds'= seq(100,500,length.out = 10),
+                        'max_depth' = 2,
+                        'eta' = .01,
+                        'gamma' = 0,
+                        'colsample_bytree' = 1,
+                        'min_child_weight' = 0,
+                        'subsample' = .5)
+boostOut      = train(x = XtrainFull, y = YtrainRelevel,
+                     method = "xgbTree", 
+                     tuneGrid = tuneGrid,
+                     metric = 'Accuracy',
+                     trControl = trControl)
 
-### 4.3 Adjusting threshold
-```{r Adjusting threshold}
-require(pROC)
-
-pHat   = predict(boostOut, XtestFull, type = 'prob')
-rocOut = roc(YtestRelevel,pHat[,1],levels=c('0','1'))
-plot(rocOut, print.thres = c(.1,.25,.5), 
-     legacy.axes = TRUE, print.thres.cex=.65)
-table(YhatTestBoost,YtestRelevel)
-
+YhatTestProbBoost      = predict(boostOut, XtestFull , type = 'prob')
 ```
 
+```{r Boosting model calibration plot}
+calibProbsBoost = calibration(YtestRelevel ~ YhatTestProbBoost$Yes, cuts = 5)
+xyplot(calibProbsBoost)
+```
 
+```{r Boosting model ROC Curve}
+#generating the roc curve
+pHatBoost   = predict(boostOut, XtestFull, type = 'prob')
+rocCurveBoost = roc(Ytest, pHatBoost[,1])
+
+#plot the roc
+plot(rocCurveLR, legacy.axes=TRUE)
+plot(rocOutGlmnet, col = 'red', add = TRUE)
+plot(rocCurveLDA, col = 'blue', add = TRUE)
+plot(rocCurveTree, col = 'green', add = TRUE)
+plot(rocCurveRF, col = 'yellow', add = TRUE)
+plot(rocCurveBoost, col = 'orange', add = TRUE)
+legend(0.2,0.5, legend=c("LR", "Elastic Net",  "LDA", "Tree", "Random Forest", "Boost"), col=c("black", "red", "blue", "green", "yellow", "orange"), lty = 1, lwd = 3)
+
+rocCurveTree$auc
+```
+
+```{r Boost model confusion matrix }
+
+thresholdsBoost = rocCurveBoost$thresholds
+pt8 = max(which(rocCurveBoost$sensitivities >= 0.80) )
+thresholdBoost= thresholdsBoost[pt8]
+specificityBoost = rocCurveBoost$specificities[pt8]
+sensitivityBoost = rocCurveBoost$sensitivities[pt8]
+
+YhatTestThreshBoost = ifelse(pHatBoost$Yes > thresholdBoost, 'Yes', 'No') %>% as.factor
+
+confusionMatrixOutBoost = confusionMatrix(reference = YtestRelevel, data = YhatTestThreshBoost, positive = "Yes")
+confusionMatrixOutBoost
+
+
+```
 
 ```{r knit stop}
 knitr::knit_exit()
 ```
+
+
+
 
 
